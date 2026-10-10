@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block titre %}Simulateur salaire net Maroc {{ config.ANNEE }}{% endblock %}</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400..700;1,9..144,400..600&family=Source+Sans+3:wght@400;500;600;700&display=swap">
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+  <script>document.documentElement.classList.add("js");</script>
+</head>
+<body>
+  <header class="masthead">
+    <div class="wrap">
+      <nav class="topnav" aria-label="Navigation principale">
+        <a href="{{ url_for('index') }}" {% if request.endpoint == 'index' %}aria-current="page"{% endif %}>Simulateur</a>
+        <a href="{{ url_for('page_statistiques') }}" {% if request.endpoint == 'page_statistiques' %}aria-current="page"{% endif %}>Statistiques</a>
+      </nav>
+      <p class="kicker">Royaume du Maroc &middot; Exercice {{ config.ANNEE }}</p>
+      {% block entete %}{% endblock %}
+    </div>
+  </header>
+
+  {% block contenu %}{% endblock %}
+
+  <footer class="wrap colophon">
+    {% block pied %}{% endblock %}
+  </footer>
+
+  {% block scripts %}{% endblock %}
+</body>
+</html>

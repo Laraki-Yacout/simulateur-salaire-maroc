@@ -116,6 +116,9 @@
       );
     });
 
+    const contribBrut = document.querySelector("[data-contrib-brut]");
+    if (contribBrut) contribBrut.textContent = dh(r.brut);
+
     renderRaise();
   }
 
@@ -259,6 +262,59 @@
     seg.addEventListener("mouseleave", () => { tip.hidden = true; });
     seg.addEventListener("blur", () => { tip.hidden = true; });
   });
+
+  // ---------- Contribution aux statistiques (uniquement au clic) ----------
+  const contribForm = document.getElementById("contribution");
+  if (contribForm) {
+    const contribMsg = contribForm.querySelector(".contrib-message");
+    const contribBtn = contribForm.querySelector(".contrib-submit");
+
+    const contribErreur = (texte) => {
+      contribMsg.textContent = texte;
+      contribMsg.classList.add("is-error");
+      contribMsg.hidden = false;
+    };
+
+    contribForm.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const brut = lireBrut();
+      if (brut === null || Number.isNaN(brut)) {
+        contribErreur("Saisissez d'abord un salaire brut dans le simulateur.");
+        return;
+      }
+      if (!contribForm.elements.consentement.checked) {
+        contribErreur("Cochez la case de consentement pour ajouter votre salaire.");
+        contribForm.elements.consentement.focus();
+        return;
+      }
+
+      const corps = new FormData(contribForm);
+      corps.set("brut", String(brut));
+      corps.set("personnes", persInput.value || "0");
+      contribBtn.disabled = true;
+
+      try {
+        const res = await fetch(contribForm.dataset.api, { method: "POST", body: corps });
+        const data = await res.json();
+        if (!res.ok) {
+          contribErreur(data.erreur);
+          contribBtn.disabled = res.status === 429;
+          return;
+        }
+        const merci = document.createElement("p");
+        merci.className = "contrib-done";
+        merci.textContent = data.message + " ";
+        const lien = document.createElement("a");
+        lien.href = contribForm.dataset.stats;
+        lien.textContent = "Voir les statistiques";
+        merci.appendChild(lien);
+        contribForm.replaceWith(merci);
+      } catch (err) {
+        contribErreur("Le serveur ne répond pas. Vérifiez qu'il est bien démarré.");
+        contribBtn.disabled = false;
+      }
+    });
+  }
 
   // ---------- Démarrage ----------
   const initialPressed = document.querySelector('[data-raise][aria-pressed="true"]');

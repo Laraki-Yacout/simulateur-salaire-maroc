@@ -1,15 +1,38 @@
 """Application Flask : simulateur de salaire net marocain."""
 
+import os
+
 from flask import Flask, jsonify, render_template, request
 
 import config
+import statistiques
 from calcul import calcul_salaire
+from models import Contribution, db
 
 app = Flask(__name__)
 
 MESSAGE_ERREUR = (
     "Veuillez saisir un salaire brut positif et un nombre de personnes à charge valide."
 )
+COOKIE_CONTRIBUTION = "contribution_recente"
+
+
+def adresse_base():
+    """DATABASE_URL si elle existe (ex. PostgreSQL), sinon SQLite dans instance/."""
+    url = os.environ.get("DATABASE_URL")
+    if url:
+        # Certains hébergeurs fournissent encore l'ancien préfixe « postgres:// »
+        if url.startswith("postgres://"):
+            url = "postgresql://" + url[len("postgres://"):]
+        return url
+    os.makedirs(app.instance_path, exist_ok=True)
+    return "sqlite:///" + os.path.join(app.instance_path, "simulateur.db")
+
+
+app.config["SQLALCHEMY_DATABASE_URI"] = adresse_base()
+db.init_app(app)
+with app.app_context():
+    db.create_all()
 
 
 @app.template_filter("dh")
@@ -17,6 +40,12 @@ def format_dh(montant):
     """Formate un montant à la française : 12 345,67 DH."""
     texte = f"{montant:,.2f}".replace(",", " ").replace(".", ",")
     return f"{texte} DH"
+
+
+@app.template_filter("dh0")
+def format_dh_arrondi(montant):
+    """Montant arrondi au dirham : 12 346 DH."""
+    return f"{montant:,.0f} DH".replace(",", " ")
 
 
 @app.template_filter("pct")
@@ -77,6 +106,7 @@ def index():
         erreur=erreur,
         brut=brut,
         personnes=personnes,
+        deja_contribue=COOKIE_CONTRIBUTION in request.cookies,
         config=config,
     )
 
@@ -90,6 +120,128 @@ def api_calcul():
     except ValueError:
         return jsonify(erreur=MESSAGE_ERREUR), 400
     return jsonify(simuler(brut, personnes))
+
+
+def lire_choix(nom, choix_possibles):
+    """Liste déroulante facultative : vide -> None, valeur inconnue -> erreur."""
+    valeur = request.form.get(nom, "").strip()
+    if not valeur:
+        return None
+    if valeur not in choix_possibles:
+        raise ValueError("Une des listes déroulantes contient une valeur inconnue.")
+    return valeur
+
+
+@app.post("/api/contributions")
+def api_contributions():
+    """Enregistre un salaire, uniquement après un clic explicite et avec consentement."""
+    if COOKIE_CONTRIBUTION in request.cookies:
+        return jsonify(erreur=(
+            "Vous avez déjà partagé un salaire depuis ce navigateur "
+            f"au cours des dernières {config.CONTRIBUTION_DELAI_HEURES} heures."
+        )), 429
+
+    if request.form.get("consentement") not in ("oui", "on", "true", "1"):
+        return jsonify(erreur=(
+            "Cochez la case de consentement pour ajouter votre salaire aux statistiques."
+        )), 400
+
+    try:
+        brut, personnes = lire_entrees(
+            request.form.get("brut", ""), request.form.get("personnes", "0")
+        )
+    except ValueError:
+        return jsonify(erreur=MESSAGE_ERREUR), 400
+
+    if not config.CONTRIBUTION_BRUT_MIN <= brut <= config.CONTRIBUTION_BRUT_MAX:
+        return jsonify(erreur=(
+            f"Seuls les salaires bruts entre {format_dh_arrondi(config.CONTRIBUTION_BRUT_MIN)} "
+            f"et {format_dh_arrondi(config.CONTRIBUTION_BRUT_MAX)} par mois sont acceptés."
+        )), 400
+
+    try:
+        contribution = Contribution(
+            salaire_brut=round(brut, 2),
+            salaire_net=calcul_salaire(brut, personnes)["net"],
+            personnes_charge=personnes,
+            ville=lire_choix("ville", config.VILLES),
+            secteur=lire_choix("secteur", config.SECTEURS),
+            experience=lire_choix("experience", config.EXPERIENCES),
+            diplome=lire_choix("diplome", config.DIPLOMES),
+            est_demo=False,
+        )
+    except ValueError as e:
+        return jsonify(erreur=str(e)), 400
+
+    db.session.add(contribution)
+    db.session.commit()
+
+    reponse = jsonify(message="Merci, votre salaire a été ajouté anonymement aux statistiques.")
+    reponse.status_code = 201
+    reponse.set_cookie(
+        COOKIE_CONTRIBUTION, "1",
+        max_age=config.CONTRIBUTION_DELAI_HEURES * 3600,
+        httponly=True, samesite="Lax",
+    )
+    return reponse
+
+
+def etiquette_k(montant):
+    """7500 -> « 7,5 k »."""
+    return f"{montant / 1000:g}".replace(".", ",") + " k"
+
+
+@app.get("/statistiques")
+def page_statistiques():
+    inclure_demo = request.args.get("demo", "1") != "0"
+    mesure = "net" if request.args.get("mesure") == "net" else "brut"
+    colonne = "salaire_net" if mesure == "net" else "salaire_brut"
+
+    requete = db.select(Contribution)
+    if not inclure_demo:
+        requete = requete.where(Contribution.est_demo.is_(False))
+    contributions = db.session.scalars(requete).all()
+    valeurs = [getattr(c, colonne) for c in contributions]
+
+    resume = statistiques.resume(valeurs)
+    tranches = statistiques.histogramme(valeurs)
+    histogramme = {
+        "etiquettes": [
+            etiquette_k(t["debut"]) + (" +" if t["fin"] is None else "") for t in tranches
+        ],
+        "titres": [
+            f"{format_dh_arrondi(t['debut'])} et plus" if t["fin"] is None
+            else f"{format_dh_arrondi(t['debut'])} à {format_dh_arrondi(t['fin'])}"
+            for t in tranches
+        ],
+        "valeurs": [t["nombre"] for t in tranches],
+        "indexMediane": next(
+            (i for i, t in enumerate(tranches)
+             if resume and (t["fin"] is None or resume["mediane"] < t["fin"])),
+            None,
+        ),
+    }
+    villes, villes_masquees = statistiques.medianes_par_groupe(contributions, "ville", colonne)
+    secteurs, secteurs_masques = statistiques.medianes_par_groupe(contributions, "secteur", colonne)
+
+    nb_demo_total = db.session.scalar(
+        db.select(db.func.count()).select_from(Contribution).where(Contribution.est_demo.is_(True))
+    )
+
+    return render_template(
+        "statistiques.html",
+        resume=resume,
+        histogramme=histogramme,
+        villes=villes,
+        villes_masquees=villes_masquees,
+        secteurs=secteurs,
+        secteurs_masques=secteurs_masques,
+        inclure_demo=inclure_demo,
+        mesure=mesure,
+        nb_demo_affiches=sum(1 for c in contributions if c.est_demo),
+        nb_demo_total=nb_demo_total,
+        config=config,
+    )
 
 
 if __name__ == "__main__":

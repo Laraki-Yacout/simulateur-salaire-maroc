@@ -1,0 +1,143 @@
+{% extends "base.html" %}
+
+{% block titre %}Statistiques des salaires · Maroc {{ config.ANNEE }}{% endblock %}
+
+{% block entete %}
+      <h1>Les salaires <em>partagés</em></h1>
+      <p class="lede">Ce que déclarent, anonymement, les personnes qui ont utilisé le simulateur.
+        Les montants sont mensuels, en salaire {{ mesure }}.</p>
+{% endblock %}
+
+{% block contenu %}
+{%- macro lien(demo=inclure_demo, m=mesure) -%}
+  {{ url_for('page_statistiques', demo=1 if demo else 0, mesure=m) }}
+{%- endmacro -%}
+  <main class="wrap stats-page">
+    <div class="stats-controls">
+      <div class="control">
+        <span class="control-label">Salaire</span>
+        <div class="toggle" role="group" aria-label="Salaire affiché">
+          <a href="{{ lien(m='brut') }}" {% if mesure == 'brut' %}aria-current="true"{% endif %}>Brut</a>
+          <a href="{{ lien(m='net') }}" {% if mesure == 'net' %}aria-current="true"{% endif %}>Net</a>
+        </div>
+      </div>
+      {% if nb_demo_total %}
+      <div class="control">
+        <span class="control-label">Données de démonstration</span>
+        <div class="toggle" role="group" aria-label="Données de démonstration">
+          <a href="{{ lien(demo=True) }}" {% if inclure_demo %}aria-current="true"{% endif %}>Incluses</a>
+          <a href="{{ lien(demo=False) }}" {% if not inclure_demo %}aria-current="true"{% endif %}>Exclues</a>
+        </div>
+      </div>
+      {% endif %}
+    </div>
+
+    {% if nb_demo_affiches %}
+      <p class="demo-banner" role="note">
+        <strong>Données de démonstration.</strong>
+        {{ nb_demo_affiches }} des {{ resume.nombre }} contributions affichées sont fictives, générées pour illustrer la page.
+        <a href="{{ lien(demo=False) }}">Les exclure</a>
+      </p>
+    {% endif %}
+
+    {% if not resume %}
+      <section class="stats-empty">
+        <p>Aucune contribution pour l'instant.</p>
+        <p><a href="{{ url_for('index') }}">Simulez votre salaire</a> puis ajoutez-le aux statistiques&nbsp;: il apparaîtra ici.</p>
+      </section>
+    {% else %}
+      <section aria-labelledby="t-chiffres">
+        <h2 class="section-title" id="t-chiffres"><span class="num">I.</span> Chiffres clés</h2>
+        <dl class="key-figures">
+          <div class="kf kf-main">
+            <dt>Médiane</dt>
+            <dd>{{ resume.mediane | dh0 }}</dd>
+          </div>
+          <div class="kf">
+            <dt>Moyenne</dt>
+            <dd>{{ resume.moyenne | dh0 }}</dd>
+          </div>
+          <div class="kf">
+            <dt>1<sup>er</sup> quartile</dt>
+            <dd>{{ resume.q1 | dh0 }}</dd>
+          </div>
+          <div class="kf">
+            <dt>3<sup>e</sup> quartile</dt>
+            <dd>{{ resume.q3 | dh0 }}</dd>
+          </div>
+          <div class="kf">
+            <dt>Contributions</dt>
+            <dd>{{ resume.nombre }}</dd>
+          </div>
+        </dl>
+        <p class="explainer">
+          <strong>Pourquoi regarder la médiane&nbsp;?</strong>
+          C'est le salaire du milieu&nbsp;: la moitié des contributeurs gagne moins, l'autre moitié plus.
+          Contrairement à la moyenne, quelques très hauts salaires ne suffisent pas à la faire grimper.
+          Les quartiles encadrent la moitié centrale&nbsp;: un quart gagne moins que le 1<sup>er</sup>,
+          un quart plus que le 3<sup>e</sup>.
+        </p>
+      </section>
+
+      <section class="sheet" aria-labelledby="t-repartition">
+        <h2 class="section-title" id="t-repartition"><span class="num">II.</span> Répartition des salaires</h2>
+        <p class="sheet-note">Nombre de contributions par tranche de {{ config.HISTOGRAMME_PAS | dh0 }}.
+          La barre la plus foncée contient la médiane.</p>
+        <div class="chart-box">
+          <canvas id="histogramme" role="img"
+                  aria-label="Histogramme : nombre de contributions par tranche de salaire {{ mesure }}"></canvas>
+        </div>
+        <script type="application/json" id="donnees-histogramme">{{ histogramme | tojson }}</script>
+      </section>
+
+      <section aria-labelledby="t-groupes">
+        <h2 class="section-title" id="t-groupes"><span class="num">III.</span> Médiane par groupe</h2>
+        <p class="sheet-note">Seuls les groupes d'au moins {{ config.STATS_GROUPE_MIN }} contributions sont affichés,
+          pour que les chiffres aient un sens et qu'aucune personne ne soit reconnaissable.</p>
+        <div class="groups">
+          {% for titre, groupes, masques, singulier in [
+               ("Par ville", villes, villes_masquees, "ville"),
+               ("Par secteur", secteurs, secteurs_masques, "secteur")] %}
+          <div class="group-col">
+            <table class="ledger group-table">
+              <caption>{{ titre }}</caption>
+              <thead>
+                <tr><th scope="col">{{ singulier | capitalize }}</th><th scope="col">Médiane</th></tr>
+              </thead>
+              <tbody>
+                {% set plus_haute = groupes[0].mediane if groupes else 1 %}
+                {% for g in groupes %}
+                  <tr>
+                    <th scope="row">{{ g.nom }}<small>{{ g.nombre }} contributions</small>
+                      <span class="gauge" aria-hidden="true"><span style="width: {{ (g.mediane / plus_haute * 100) | round(1) }}%"></span></span>
+                    </th>
+                    <td>{{ g.mediane | dh0 }}</td>
+                  </tr>
+                {% else %}
+                  <tr><td colspan="2" class="group-empty">Pas encore assez de contributions.</td></tr>
+                {% endfor %}
+              </tbody>
+            </table>
+            {% if masques %}
+              <p class="group-hidden">{{ masques }} {{ singulier }}{{ "s" if masques > 1 }} masqué{{ "e" if singulier == "ville" }}{{ "s" if masques > 1 }}
+                (moins de {{ config.STATS_GROUPE_MIN }} contributions).</p>
+            {% endif %}
+          </div>
+          {% endfor %}
+        </div>
+      </section>
+    {% endif %}
+  </main>
+{% endblock %}
+
+{% block pied %}
+    <p>Statistiques indicatives, fondées sur des déclarations volontaires et non vérifiées.
+      Aucune donnée personnelle n'est collectée&nbsp;: ni nom, ni e-mail, ni adresse IP.</p>
+{% endblock %}
+
+{% block scripts %}
+  {% if resume %}
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js" defer></script>
+  <script src="{{ url_for('static', filename='statistiques.js') }}" defer></script>
+  {% endif %}
+{% endblock %}

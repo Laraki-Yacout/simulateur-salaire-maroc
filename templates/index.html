@@ -1,28 +1,15 @@
-<!doctype html>
-<html lang="fr">
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Simulateur salaire net Maroc {{ config.ANNEE }}</title>
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400..700;1,9..144,400..600&family=Source+Sans+3:wght@400;500;600;700&display=swap">
-  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
-  <script>document.documentElement.classList.add("js");</script>
-</head>
-{%- macro m(cle) -%}{{ (resultat[cle] | dh) if resultat else "—" }}{%- endmacro -%}
-{%- macro part(cle) -%}{{ ((resultat[cle] / resultat.brut * 100) | round(2)) if resultat else 0 }}{%- endmacro -%}
-{%- set aug = augmentations[1] if augmentations|length > 1 else None -%}
-<body>
-  <header class="masthead">
-    <div class="wrap">
-      <p class="kicker">Royaume du Maroc &middot; Exercice {{ config.ANNEE }}</p>
+{% extends "base.html" %}
+
+{% block entete %}
       <h1>Du brut <em>au net</em></h1>
       <p class="lede">Ce que deviennent vos {{ (resultat.brut | dh) if resultat else "revenus" }} une fois passés
         la CNSS, l'AMO et l'impôt sur le revenu&nbsp;: un relevé ligne par ligne, mis à jour pendant la saisie.</p>
-    </div>
-  </header>
+{% endblock %}
 
+{% block contenu %}
+{%- macro m(cle) -%}{{ (resultat[cle] | dh) if resultat else "—" }}{%- endmacro -%}
+{%- macro part(cle) -%}{{ ((resultat[cle] / resultat.brut * 100) | round(2)) if resultat else 0 }}{%- endmacro -%}
+{%- set aug = augmentations[1] if augmentations|length > 1 else None -%}
   <main class="wrap page">
     <section class="inputs" aria-labelledby="t-donnees">
       <h2 class="section-title" id="t-donnees"><span class="num">I.</span> Vos données</h2>
@@ -183,13 +170,55 @@
         <span data-periode-label-court>par mois</span>.
       </p>
     </aside>
-  </main>
 
-  <footer class="wrap colophon">
+    <section class="contrib" aria-labelledby="t-contrib">
+      <h2 class="section-title" id="t-contrib"><span class="num">III.</span> Contribuer aux statistiques</h2>
+      {% if deja_contribue %}
+        <p class="contrib-done">Merci&nbsp;! Vous avez déjà partagé un salaire depuis ce navigateur
+          au cours des dernières {{ config.CONTRIBUTION_DELAI_HEURES }}&nbsp;heures.
+          <a href="{{ url_for('page_statistiques') }}">Voir les statistiques</a></p>
+      {% else %}
+        <p class="contrib-intro">Partagez anonymement le salaire simulé ci-dessus
+          (<strong data-contrib-brut>{{ m("brut") }}</strong> brut par mois).
+          Seuls les montants et les critères choisis sont enregistrés&nbsp;: ni nom, ni e-mail, ni adresse IP.</p>
+        <noscript><p class="contrib-intro">Activez JavaScript pour contribuer.</p></noscript>
+
+        <form id="contribution" class="contrib-form" novalidate
+              data-api="{{ url_for('api_contributions') }}" data-stats="{{ url_for('page_statistiques') }}">
+          <div class="contrib-grid">
+            {% for nom, libelle, choix in [
+                 ("ville", "Ville", config.VILLES),
+                 ("secteur", "Secteur", config.SECTEURS),
+                 ("experience", "Expérience", config.EXPERIENCES),
+                 ("diplome", "Diplôme", config.DIPLOMES)] %}
+              <div class="select-field">
+                <label for="c-{{ nom }}">{{ libelle }} <span class="optional">facultatif</span></label>
+                <select id="c-{{ nom }}" name="{{ nom }}">
+                  <option value="">Non précisé</option>
+                  {% for valeur in choix %}<option>{{ valeur }}</option>{% endfor %}
+                </select>
+              </div>
+            {% endfor %}
+          </div>
+
+          <label class="consent">
+            <input type="checkbox" name="consentement" value="oui" required>
+            <span>J'accepte que mon salaire soit ajouté anonymement aux statistiques</span>
+          </label>
+
+          <p class="contrib-message" role="status" hidden></p>
+          <button type="submit" class="contrib-submit">Ajouter mon salaire</button>
+        </form>
+      {% endif %}
+    </section>
+  </main>
+{% endblock %}
+
+{% block pied %}
     <p>Simulation indicative hors primes, indemnités exonérées et retraite complémentaire.
       Barème de l'impôt sur le revenu&nbsp;: article 73 du Code général des impôts.</p>
-  </footer>
+{% endblock %}
 
+{% block scripts %}
   <script src="{{ url_for('static', filename='app.js') }}" defer></script>
-</body>
-</html>
+{% endblock %}

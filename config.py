@@ -40,3 +40,23 @@ CURSEUR_MIN = 3000
 CURSEUR_MAX = 50000
 CURSEUR_PAS = 100
 AUGMENTATIONS = [5, 10, 20]  # scénarios « Et si j'étais augmenté ? », en %
+
+# Contributions anonymes aux statistiques
+CONTRIBUTION_BRUT_MIN = 2500
+CONTRIBUTION_BRUT_MAX = 200000
+CONTRIBUTION_DELAI_HEURES = 24  # une contribution par navigateur sur cette durée
+STATS_GROUPE_MIN = 5  # taille minimale d'un groupe (ville, secteur) pour l'afficher
+HISTOGRAMME_PAS = 2500  # largeur des barres de l'histogramme, en DH
+HISTOGRAMME_MAX = 50000  # au-delà, tout est regroupé dans la dernière barre
+
+VILLES = [
+    "Casablanca", "Rabat", "Marrakech", "Fès", "Tanger", "Agadir",
+    "Meknès", "Oujda", "Kénitra", "Tétouan", "Autre",
+]
+SECTEURS = [
+    "Informatique/Télécom", "Banque/Assurance", "Industrie", "BTP",
+    "Commerce/Distribution", "Offshoring/Centres d'appels", "Santé", "Éducation",
+    "Administration publique", "Tourisme/Hôtellerie", "Autre",
+]
+EXPERIENCES = ["Moins d'1 an", "1-3 ans", "3-5 ans", "5-10 ans", "Plus de 10 ans"]
+DIPLOMES = ["Bac ou moins", "Bac+2", "Bac+3", "Bac+5", "Doctorat"]
