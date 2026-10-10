@@ -1,0 +1,195 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Simulateur salaire net Maroc {{ config.ANNEE }}</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400..700;1,9..144,400..600&family=Source+Sans+3:wght@400;500;600;700&display=swap">
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+  <script>document.documentElement.classList.add("js");</script>
+</head>
+{%- macro m(cle) -%}{{ (resultat[cle] | dh) if resultat else "—" }}{%- endmacro -%}
+{%- macro part(cle) -%}{{ ((resultat[cle] / resultat.brut * 100) | round(2)) if resultat else 0 }}{%- endmacro -%}
+{%- set aug = augmentations[1] if augmentations|length > 1 else None -%}
+<body>
+  <header class="masthead">
+    <div class="wrap">
+      <p class="kicker">Royaume du Maroc &middot; Exercice {{ config.ANNEE }}</p>
+      <h1>Du brut <em>au net</em></h1>
+      <p class="lede">Ce que deviennent vos {{ (resultat.brut | dh) if resultat else "revenus" }} une fois passés
+        la CNSS, l'AMO et l'impôt sur le revenu&nbsp;: un relevé ligne par ligne, mis à jour pendant la saisie.</p>
+    </div>
+  </header>
+
+  <main class="wrap page">
+    <section class="inputs" aria-labelledby="t-donnees">
+      <h2 class="section-title" id="t-donnees"><span class="num">I.</span> Vos données</h2>
+
+      <form method="post" id="simulateur" data-api="{{ url_for('api_calcul') }}" novalidate>
+        <div class="field">
+          <label for="brut">Salaire brut mensuel</label>
+          <div class="amount-input">
+            <input type="text" inputmode="decimal" id="brut" name="brut" value="{{ brut }}"
+                   autocomplete="off" aria-describedby="brut-aide">
+            <span class="unit">DH</span>
+          </div>
+          <input type="range" id="brut-curseur" class="slider" aria-label="Salaire brut mensuel (curseur)"
+                 min="{{ config.CURSEUR_MIN }}" max="{{ config.CURSEUR_MAX }}" step="{{ config.CURSEUR_PAS }}"
+                 value="{{ resultat.brut if resultat else config.BRUT_PAR_DEFAUT }}">
+          <div class="slider-scale" id="brut-aide">
+            <span>{{ config.CURSEUR_MIN | dh }}</span><span>{{ config.CURSEUR_MAX | dh }}</span>
+          </div>
+        </div>
+
+        <div class="field">
+          <label for="personnes">Personnes à charge</label>
+          <div class="stepper">
+            <button type="button" class="step" data-step="-1" aria-label="Retirer une personne">&minus;</button>
+            <input type="number" id="personnes" name="personnes" value="{{ personnes }}"
+                   min="0" max="{{ config.CHARGES_FAMILLE_MAX }}" step="1" inputmode="numeric">
+            <button type="button" class="step" data-step="1" aria-label="Ajouter une personne">+</button>
+          </div>
+          <p class="hint">Conjoint et enfants&nbsp;: {{ config.CHARGE_FAMILLE_ANNUELLE | int }} DH d'impôt en moins
+            par an et par personne, {{ config.CHARGES_FAMILLE_MAX }} au maximum.</p>
+        </div>
+
+        <p class="error" role="alert" id="erreur" {% if not erreur %}hidden{% endif %}>{{ erreur or "" }}</p>
+        <button type="submit" class="submit">Calculer</button>
+      </form>
+    </section>
+
+    <section class="statement" aria-labelledby="t-net">
+      <div class="statement-head">
+        <h2 class="section-title" id="t-net"><span class="num">II.</span> Votre relevé</h2>
+        <div class="toggle" role="group" aria-label="Période d'affichage">
+          <button type="button" data-periode="mensuel" aria-pressed="true">Mensuel</button>
+          <button type="button" data-periode="annuel" aria-pressed="false">Annuel</button>
+        </div>
+      </div>
+
+      <div class="net-figure">
+        <p class="net-label">Salaire net <span data-periode-label>mensuel</span></p>
+        <p class="net-value">
+          <span class="odometer" id="net-chiffres" aria-hidden="true">{{ m("net") | replace(" DH", "") }}</span>
+          <span class="net-unit" aria-hidden="true">DH</span>
+          <span class="sr-only" id="net-lecteur" aria-live="polite">{{ m("net") }}</span>
+        </p>
+        <p class="net-sub">
+          soit <strong data-autre-periode>{{ (resultat.net_annuel | dh) if resultat else "—" }}</strong>
+          <span data-autre-periode-label>par an</span> &middot;
+          <span data-text="taux_prelevement">{{ (resultat.taux_prelevement | string | replace(".", ",")) if resultat else "—" }}</span>&nbsp;% du brut prélevé
+        </p>
+      </div>
+
+      <figure class="split">
+        <figcaption>Où part votre salaire brut</figcaption>
+        <div class="split-bar" id="split-bar">
+          <div class="seg seg-net" data-seg="net" tabindex="0" style="width: {{ part('net') }}%"></div>
+          <div class="seg seg-cnss" data-seg="cnss_ipe" tabindex="0" style="width: {{ ((((resultat.cnss + resultat.ipe) / resultat.brut * 100) | round(2)) if resultat else 0) }}%"></div>
+          <div class="seg seg-amo" data-seg="amo" tabindex="0" style="width: {{ part('amo') }}%"></div>
+          <div class="seg seg-ir" data-seg="ir" tabindex="0" style="width: {{ part('ir') }}%"></div>
+          <div class="split-tip" id="split-tip" role="tooltip" hidden></div>
+        </div>
+        <ul class="split-legend">
+          <li><i class="key seg-net"></i>Net <span data-money="net">{{ m("net") }}</span></li>
+          <li><i class="key seg-cnss"></i>CNSS + IPE <span data-money="cnss_ipe">{{ ((resultat.cnss + resultat.ipe) | dh) if resultat else "—" }}</span></li>
+          <li><i class="key seg-amo"></i>AMO <span data-money="amo">{{ m("amo") }}</span></li>
+          <li><i class="key seg-ir"></i>IR <span data-money="ir">{{ m("ir") }}</span></li>
+        </ul>
+      </figure>
+
+      <table class="ledger">
+        <caption>Détail <span data-periode-label>mensuel</span></caption>
+        <tbody>
+          <tr class="row-head">
+            <th scope="row">Salaire brut</th>
+            <td><span data-money="brut">{{ m("brut") }}</span></td>
+          </tr>
+
+          <tr class="group"><th colspan="2" scope="rowgroup">Cotisations salariales</th></tr>
+          <tr>
+            <th scope="row">CNSS <span class="rate">{{ config.CNSS_TAUX | pct }}</span>
+              <small>sur <span data-money="assiette_cnss">{{ m("assiette_cnss") }}</span>, plafond {{ config.CNSS_PLAFOND_MENSUEL | dh }}/mois</small></th>
+            <td class="neg">&minus;&nbsp;<span data-money="cnss">{{ m("cnss") }}</span></td>
+          </tr>
+          <tr>
+            <th scope="row">Indemnité perte d'emploi <span class="rate">{{ config.IPE_TAUX | pct }}</span></th>
+            <td class="neg">&minus;&nbsp;<span data-money="ipe">{{ m("ipe") }}</span></td>
+          </tr>
+          <tr>
+            <th scope="row">AMO <span class="rate">{{ config.AMO_TAUX | pct }}</span><small>sans plafond</small></th>
+            <td class="neg">&minus;&nbsp;<span data-money="amo">{{ m("amo") }}</span></td>
+          </tr>
+          <tr class="subtotal">
+            <th scope="row">Total des cotisations</th>
+            <td class="neg">&minus;&nbsp;<span data-money="total_cotisations">{{ m("total_cotisations") }}</span></td>
+          </tr>
+
+          <tr class="group"><th colspan="2" scope="rowgroup">Impôt sur le revenu</th></tr>
+          <tr class="memo">
+            <th scope="row">Frais professionnels <span class="rate" data-text="frais_pct">{{ (resultat.taux_frais_pro | pct) if resultat else "" }}</span>
+              <small>déduits de la base imposable, plafond {{ config.FRAIS_PRO_PLAFOND_ANNUEL | dh }}/an</small></th>
+            <td><span data-money="frais_pro">{{ m("frais_pro") }}</span></td>
+          </tr>
+          <tr class="memo">
+            <th scope="row">Revenu net imposable</th>
+            <td><span data-money="net_imposable">{{ m("net_imposable") }}</span></td>
+          </tr>
+          <tr class="memo">
+            <th scope="row">IR selon le barème</th>
+            <td><span data-money="ir_brut">{{ m("ir_brut") }}</span></td>
+          </tr>
+          <tr class="memo">
+            <th scope="row">Réduction charges de famille
+              <small><span data-text="personnes_retenues">{{ resultat.personnes_retenues if resultat else 0 }}</span> personne(s) retenue(s)</small></th>
+            <td>&minus;&nbsp;<span data-money="reduction_famille">{{ m("reduction_famille") }}</span></td>
+          </tr>
+          <tr class="subtotal">
+            <th scope="row">IR retenu à la source</th>
+            <td class="neg">&minus;&nbsp;<span data-money="ir">{{ m("ir") }}</span></td>
+          </tr>
+
+          <tr class="row-total">
+            <th scope="row">Salaire net</th>
+            <td><span data-money="net">{{ m("net") }}</span></td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+
+    <aside class="raise" aria-labelledby="t-raise">
+      <h2 id="t-raise">Et si j'étais augmenté&nbsp;?</h2>
+      <div class="raise-choices" role="group" aria-label="Pourcentage d'augmentation">
+        {% for pct in config.AUGMENTATIONS %}
+          <button type="button" data-raise="{{ pct }}" aria-pressed="{{ 'true' if aug and pct == aug.pourcentage else 'false' }}">+{{ pct }}&nbsp;%</button>
+        {% endfor %}
+      </div>
+      <dl class="raise-figures">
+        <div>
+          <dt>Hausse du brut</dt>
+          <dd>+&nbsp;<span data-raise-field="gain_brut">{{ (aug.gain_brut | dh) if aug else "—" }}</span></dd>
+        </div>
+        <div class="raise-main">
+          <dt>Ce que vous touchez vraiment</dt>
+          <dd>+&nbsp;<span data-raise-field="gain_net">{{ (aug.gain_net | dh) if aug else "—" }}</span></dd>
+        </div>
+      </dl>
+      <p class="raise-note">
+        Sur 100 DH d'augmentation, vous en gardez
+        <strong data-raise-field="part_conservee">{{ (aug.part_conservee | string | replace(".", ",") ~ " DH") if aug else "—" }}</strong>.
+        Nouveau net&nbsp;: <strong data-raise-field="net">{{ (aug.net | dh) if aug else "—" }}</strong>
+        <span data-periode-label-court>par mois</span>.
+      </p>
+    </aside>
+  </main>
+
+  <footer class="wrap colophon">
+    <p>Simulation indicative hors primes, indemnités exonérées et retraite complémentaire.
+      Barème de l'impôt sur le revenu&nbsp;: article 73 du Code général des impôts.</p>
+  </footer>
+
+  <script src="{{ url_for('static', filename='app.js') }}" defer></script>
+</body>
+</html>

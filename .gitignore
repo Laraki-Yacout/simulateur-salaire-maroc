@@ -1,0 +1,15 @@
+# Environnement virtuel
+venv/
+
+# Fichiers Python compilés
+__pycache__/
+*.pyc
+
+# Base de données et dossier instance
+instance/
+*.db
+*.sqlite3
+
+# Outils
+.pytest_cache/
+.env
