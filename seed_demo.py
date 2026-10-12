@@ -70,6 +70,7 @@ assert set(VILLES) == set(config.VILLES) and set(SECTEURS) == set(config.SECTEUR
 assert set(EXPERIENCES) == set(config.EXPERIENCES) and set(DIPLOMES) == set(config.DIPLOMES)
 
 
+# Poids cumulés précalculés : chaque graine essayée fait plus d'un millier de tirages.
 def _cumuls(table):
     total, cumuls = 0, []
     for poids, _ in table.values():
@@ -124,44 +125,46 @@ def en_contribution(t):
     )
 
 
-def medianes(contributions, attribut):
+def medianes_et_effectifs(contributions, attribut):
     groupes = defaultdict(list)
     for c in contributions:
         if getattr(c, attribut):
             groupes[getattr(c, attribut)].append(c.salaire_brut)
-    return {nom: (statistics.median(v), len(v)) for nom, v in groupes.items()}
+    return {nom: (statistics.median(salaires), len(salaires)) for nom, salaires in groupes.items()}
 
 
 def est_coherent(contributions):
     """Vrai si tous les groupes sont affichables et si les médianes suivent la hiérarchie."""
     par_critere = {
-        "ville": medianes(contributions, "ville"),
-        "secteur": medianes(contributions, "secteur"),
-        "experience": medianes(contributions, "experience"),
-        "diplome": medianes(contributions, "diplome"),
+        critere: medianes_et_effectifs(contributions, critere)
+        for critere in ("ville", "secteur", "experience", "diplome")
     }
     for groupes, attendus in zip(par_critere.values(), (VILLES, SECTEURS, EXPERIENCES, DIPLOMES)):
         if set(groupes) != set(attendus) or min(n for _, n in groupes.values()) < config.STATS_GROUPE_MIN:
             return False
-    med = {critere: {nom: m for nom, (m, _) in g.items()} for critere, g in par_critere.items()}
+    medianes = {
+        critere: {nom: mediane for nom, (mediane, _) in groupes.items()}
+        for critere, groupes in par_critere.items()
+    }
 
     # Villes : chaque palier strictement au-dessus du suivant
+    villes = medianes["ville"]
     for haut, bas in zip(VILLES_PALIERS, VILLES_PALIERS[1:]):
-        if min(med["ville"][v] for v in haut) <= max(med["ville"][v] for v in bas):
+        if min(villes[v] for v in haut) <= max(villes[v] for v in bas):
             return False
 
     # Secteurs : banque et informatique en tête, tourisme et BTP en bas
+    secteurs = medianes["secteur"]
     autres = set(SECTEURS) - SECTEURS_HAUTS - SECTEURS_BAS
-    s = med["secteur"]
-    if min(s[x] for x in SECTEURS_HAUTS) <= max(s[x] for x in autres | SECTEURS_BAS):
+    if min(secteurs[x] for x in SECTEURS_HAUTS) <= max(secteurs[x] for x in autres | SECTEURS_BAS):
         return False
-    if max(s[x] for x in SECTEURS_BAS) >= min(s[x] for x in autres):
+    if max(secteurs[x] for x in SECTEURS_BAS) >= min(secteurs[x] for x in autres):
         return False
 
     # Expérience et diplôme : médianes strictement croissantes
     for critere, ordre in (("experience", EXPERIENCES), ("diplome", DIPLOMES)):
-        valeurs = [med[critere][nom] for nom in ordre]
-        if any(a >= b for a, b in zip(valeurs, valeurs[1:])):
+        valeurs = [medianes[critere][nom] for nom in ordre]
+        if any(precedente >= suivante for precedente, suivante in zip(valeurs, valeurs[1:])):
             return False
     return True
 

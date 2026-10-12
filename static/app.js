@@ -5,7 +5,7 @@
   const form = document.getElementById("simulateur");
   const brutInput = document.getElementById("brut");
   const slider = document.getElementById("brut-curseur");
-  const persInput = document.getElementById("personnes");
+  const personnesInput = document.getElementById("personnes");
   const errorBox = document.getElementById("erreur");
   const odometer = document.getElementById("net-chiffres");
   const netReader = document.getElementById("net-lecteur");
@@ -13,10 +13,10 @@
   const bar = document.getElementById("split-bar");
   const tip = document.getElementById("split-tip");
 
-  const PERS_MAX = Number(persInput.max);
+  const PERSONNES_MAX = Number(personnesInput.max);
   const SEGMENTS = { net: "Net", cnss_ipe: "CNSS + IPE", amo: "AMO", ir: "IR" };
 
-  const state = { periode: "mensuel", raise: 10, data: null };
+  const state = { periode: "mensuel", augmentation: 10, data: null };
   let timer = null;
   let controller = null;
 
@@ -27,11 +27,12 @@
     return (n < 0 ? "-" : "") + groupes + "," + dec;
   }
   const dh = (n) => nombre(n) + " DH";
-  const facteur = () => (state.periode === "annuel" ? 12 : 1);
+  const multiplicateurPeriode = () => (state.periode === "annuel" ? 12 : 1);
 
   function lireBrut() {
-    const v = brutInput.value.replace(/[\s ]/g, "").replace(",", ".");
-    return v === "" ? null : Number(v);
+    // \s couvre aussi l'espace fine insécable des nombres saisis à la française.
+    const texte = brutInput.value.replace(/\s/g, "").replace(",", ".");
+    return texte === "" ? null : Number(texte);
   }
 
   // ---------- Compteur à rouleaux ----------
@@ -62,7 +63,9 @@
           odometer.appendChild(sep);
         }
       });
-      void odometer.offsetWidth; // départ à 0, puis défilement vers la valeur
+      // Force le navigateur à afficher les rouleaux à 0 avant d'appliquer la
+      // transition : sans cela, les nouveaux chiffres apparaîtraient sans défiler.
+      void odometer.offsetWidth;
     }
 
     const strips = odometer.querySelectorAll(".odo-strip");
@@ -80,60 +83,61 @@
   // ---------- Affichage ----------
   function render() {
     if (!state.data) return;
-    const r = state.data.resultat;
-    const f = facteur();
-    const valeurs = Object.assign({}, r, { cnss_ipe: r.cnss + r.ipe });
+    const resultat = state.data.resultat;
+    const mult = multiplicateurPeriode();
+    const valeurs = Object.assign({}, resultat, { cnss_ipe: resultat.cnss + resultat.ipe });
 
     document.querySelectorAll("[data-money]").forEach((el) => {
-      const v = valeurs[el.dataset.money];
-      if (typeof v === "number") el.textContent = dh(v * f);
+      const montant = valeurs[el.dataset.money];
+      if (typeof montant === "number") el.textContent = dh(montant * mult);
     });
     document.querySelector('[data-text="frais_pct"]').textContent =
-      Math.round(r.taux_frais_pro * 100) + " %";
-    document.querySelector('[data-text="personnes_retenues"]').textContent = r.personnes_retenues;
+      Math.round(resultat.taux_frais_pro * 100) + " %";
+    document.querySelector('[data-text="personnes_retenues"]').textContent = resultat.personnes_retenues;
     document.querySelector('[data-text="taux_prelevement"]').textContent =
-      String(r.taux_prelevement).replace(".", ",");
+      String(resultat.taux_prelevement).replace(".", ",");
 
-    // Montant net mis en avant
-    setOdometer(nombre(r.net * f));
-    netReader.textContent = dh(r.net * f);
+    setOdometer(nombre(resultat.net * mult));
+    netReader.textContent = dh(resultat.net * mult);
     const annuel = state.periode === "annuel";
-    document.querySelector("[data-autre-periode]").textContent = dh(annuel ? r.net : r.net * 12);
+    document.querySelector("[data-autre-periode]").textContent =
+      dh(annuel ? resultat.net : resultat.net * 12);
     document.querySelector("[data-autre-periode-label]").textContent = annuel ? "par mois" : "par an";
     document.querySelectorAll("[data-periode-label]").forEach((el) => {
       el.textContent = annuel ? "annuel" : "mensuel";
     });
     document.querySelector("[data-periode-label-court]").textContent = annuel ? "par an" : "par mois";
 
-    // Barre de répartition
     Object.keys(SEGMENTS).forEach((cle) => {
       const seg = bar.querySelector('[data-seg="' + cle + '"]');
-      const part = r.brut ? (valeurs[cle] / r.brut) * 100 : 0;
+      const part = resultat.brut ? (valeurs[cle] / resultat.brut) * 100 : 0;
       seg.style.width = part + "%";
       seg.setAttribute(
         "aria-label",
-        SEGMENTS[cle] + " : " + dh(valeurs[cle] * f) + ", " + nombre(part).replace(/,?0+$/, "") + " % du brut"
+        SEGMENTS[cle] + " : " + dh(valeurs[cle] * mult) + ", " +
+          nombre(part).replace(/,?0+$/, "") + " % du brut"
       );
     });
 
+    // Toujours mensuel : c'est le brut mensuel qui est enregistré.
     const contribBrut = document.querySelector("[data-contrib-brut]");
-    if (contribBrut) contribBrut.textContent = dh(r.brut);
+    if (contribBrut) contribBrut.textContent = dh(resultat.brut);
 
     renderRaise();
   }
 
   function renderRaise() {
-    const a = state.data.augmentations.find((x) => x.pourcentage === state.raise);
-    if (!a) return;
-    const f = facteur();
-    document.querySelectorAll("[data-raise]").forEach((b) => {
-      b.setAttribute("aria-pressed", String(Number(b.dataset.raise) === state.raise));
+    const scenario = state.data.augmentations.find((s) => s.pourcentage === state.augmentation);
+    if (!scenario) return;
+    const mult = multiplicateurPeriode();
+    document.querySelectorAll("[data-raise]").forEach((bouton) => {
+      bouton.setAttribute("aria-pressed", String(Number(bouton.dataset.raise) === state.augmentation));
     });
-    document.querySelector('[data-raise-field="gain_brut"]').textContent = dh(a.gain_brut * f);
-    document.querySelector('[data-raise-field="gain_net"]').textContent = dh(a.gain_net * f);
-    document.querySelector('[data-raise-field="net"]').textContent = dh(a.net * f);
+    document.querySelector('[data-raise-field="gain_brut"]').textContent = dh(scenario.gain_brut * mult);
+    document.querySelector('[data-raise-field="gain_net"]').textContent = dh(scenario.gain_net * mult);
+    document.querySelector('[data-raise-field="net"]').textContent = dh(scenario.net * mult);
     document.querySelector('[data-raise-field="part_conservee"]').textContent =
-      String(a.part_conservee).replace(".", ",") + " DH";
+      String(scenario.part_conservee).replace(".", ",") + " DH";
   }
 
   function showError(message) {
@@ -154,7 +158,7 @@
 
     if (controller) controller.abort();
     controller = new AbortController();
-    const params = new URLSearchParams({ brut: String(brut), personnes: persInput.value || "0" });
+    const params = new URLSearchParams({ brut: String(brut), personnes: personnesInput.value || "0" });
 
     try {
       const res = await fetch(form.dataset.api + "?" + params, { signal: controller.signal });
@@ -180,8 +184,8 @@
   function paintSlider() {
     const min = Number(slider.min);
     const max = Number(slider.max);
-    const p = ((Number(slider.value) - min) / (max - min)) * 100;
-    slider.style.setProperty("--p", p + "%");
+    const progression = ((Number(slider.value) - min) / (max - min)) * 100;
+    slider.style.setProperty("--p", progression + "%");
   }
 
   slider.addEventListener("input", () => {
@@ -191,9 +195,9 @@
   });
 
   brutInput.addEventListener("input", () => {
-    const v = lireBrut();
-    if (v !== null && !Number.isNaN(v)) {
-      slider.value = String(Math.min(Math.max(v, Number(slider.min)), Number(slider.max)));
+    const brut = lireBrut();
+    if (brut !== null && !Number.isNaN(brut)) {
+      slider.value = String(Math.min(Math.max(brut, Number(slider.min)), Number(slider.max)));
       paintSlider();
     }
     schedule(180);
@@ -201,22 +205,22 @@
 
   // ---------- Personnes à charge ----------
   function setPersonnes(n) {
-    const v = Math.min(Math.max(Number.isFinite(n) ? n : 0, 0), PERS_MAX);
-    persInput.value = String(v);
-    form.querySelector('[data-step="-1"]').disabled = v <= 0;
-    form.querySelector('[data-step="1"]').disabled = v >= PERS_MAX;
+    const personnes = Math.min(Math.max(Number.isFinite(n) ? n : 0, 0), PERSONNES_MAX);
+    personnesInput.value = String(personnes);
+    form.querySelector('[data-step="-1"]').disabled = personnes <= 0;
+    form.querySelector('[data-step="1"]').disabled = personnes >= PERSONNES_MAX;
   }
 
   form.querySelectorAll("[data-step]").forEach((btn) => {
     btn.addEventListener("click", () => {
-      setPersonnes(parseInt(persInput.value || "0", 10) + Number(btn.dataset.step));
+      setPersonnes(parseInt(personnesInput.value || "0", 10) + Number(btn.dataset.step));
       schedule(0);
     });
   });
 
-  persInput.addEventListener("input", () => {
-    if (persInput.value === "") return;
-    setPersonnes(parseInt(persInput.value, 10));
+  personnesInput.addEventListener("input", () => {
+    if (personnesInput.value === "") return;
+    setPersonnes(parseInt(personnesInput.value, 10));
     schedule(120);
   });
 
@@ -229,8 +233,8 @@
   document.querySelectorAll("[data-periode]").forEach((btn) => {
     btn.addEventListener("click", () => {
       state.periode = btn.dataset.periode;
-      document.querySelectorAll("[data-periode]").forEach((b) => {
-        b.setAttribute("aria-pressed", String(b === btn));
+      document.querySelectorAll("[data-periode]").forEach((bouton) => {
+        bouton.setAttribute("aria-pressed", String(bouton === btn));
       });
       render();
     });
@@ -239,7 +243,7 @@
   // ---------- Augmentation ----------
   document.querySelectorAll("[data-raise]").forEach((btn) => {
     btn.addEventListener("click", () => {
-      state.raise = Number(btn.dataset.raise);
+      state.augmentation = Number(btn.dataset.raise);
       if (state.data) renderRaise();
     });
   });
@@ -269,7 +273,7 @@
     const contribMsg = contribForm.querySelector(".contrib-message");
     const contribBtn = contribForm.querySelector(".contrib-submit");
 
-    const contribErreur = (texte) => {
+    const showContribError = (texte) => {
       contribMsg.textContent = texte;
       contribMsg.classList.add("is-error");
       contribMsg.hidden = false;
@@ -279,25 +283,25 @@
       e.preventDefault();
       const brut = lireBrut();
       if (brut === null || Number.isNaN(brut)) {
-        contribErreur("Saisissez d'abord un salaire brut dans le simulateur.");
+        showContribError("Saisissez d'abord un salaire brut dans le simulateur.");
         return;
       }
       if (!contribForm.elements.consentement.checked) {
-        contribErreur("Cochez la case de consentement pour ajouter votre salaire.");
+        showContribError("Cochez la case de consentement pour ajouter votre salaire.");
         contribForm.elements.consentement.focus();
         return;
       }
 
       const corps = new FormData(contribForm);
       corps.set("brut", String(brut));
-      corps.set("personnes", persInput.value || "0");
+      corps.set("personnes", personnesInput.value || "0");
       contribBtn.disabled = true;
 
       try {
         const res = await fetch(contribForm.dataset.api, { method: "POST", body: corps });
         const data = await res.json();
         if (!res.ok) {
-          contribErreur(data.erreur);
+          showContribError(data.erreur);
           contribBtn.disabled = res.status === 429;
           return;
         }
@@ -310,7 +314,7 @@
         merci.appendChild(lien);
         contribForm.replaceWith(merci);
       } catch (err) {
-        contribErreur("Le serveur ne répond pas. Vérifiez qu'il est bien démarré.");
+        showContribError("Le serveur ne répond pas. Vérifiez qu'il est bien démarré.");
         contribBtn.disabled = false;
       }
     });
@@ -318,8 +322,8 @@
 
   // ---------- Démarrage ----------
   const initialPressed = document.querySelector('[data-raise][aria-pressed="true"]');
-  if (initialPressed) state.raise = Number(initialPressed.dataset.raise);
-  setPersonnes(parseInt(persInput.value || "0", 10));
+  if (initialPressed) state.augmentation = Number(initialPressed.dataset.raise);
+  setPersonnes(parseInt(personnesInput.value || "0", 10));
   paintSlider();
   update();
 })();

@@ -6,7 +6,7 @@
   const source = document.getElementById("donnees-histogramme");
   if (!canvas || !source || typeof Chart === "undefined") return;
 
-  const d = JSON.parse(source.textContent);
+  const donnees = JSON.parse(source.textContent);
   const css = getComputedStyle(document.documentElement);
   const couleur = (nom) => css.getPropertyValue(nom).trim();
 
@@ -16,11 +16,11 @@
   new Chart(canvas, {
     type: "bar",
     data: {
-      labels: d.etiquettes,
+      labels: donnees.etiquettes,
       datasets: [{
-        data: d.valeurs,
-        backgroundColor: d.valeurs.map((_, i) =>
-          i === d.indexMediane ? couleur("--bordeaux-fonce") : couleur("--rose")
+        data: donnees.valeurs,
+        backgroundColor: donnees.valeurs.map((_, i) =>
+          i === donnees.indexMediane ? couleur("--bordeaux-fonce") : couleur("--rose")
         ),
         hoverBackgroundColor: couleur("--bordeaux"),
         borderRadius: 0,
@@ -42,11 +42,11 @@
           displayColors: false,
           padding: 10,
           callbacks: {
-            title: (items) => d.titres[items[0].dataIndex],
+            title: (items) => donnees.titres[items[0].dataIndex],
             label: (item) => {
-              const n = item.parsed.y;
-              const texte = n + (n > 1 ? " contributions" : " contribution");
-              return item.dataIndex === d.indexMediane ? [texte, "Contient la médiane"] : texte;
+              const nombre = item.parsed.y;
+              const texte = nombre + (nombre > 1 ? " contributions" : " contribution");
+              return item.dataIndex === donnees.indexMediane ? [texte, "Contient la médiane"] : texte;
             },
           },
         },

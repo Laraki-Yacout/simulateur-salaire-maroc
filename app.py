@@ -11,9 +11,11 @@ from models import Contribution, db
 
 app = Flask(__name__)
 
-MESSAGE_ERREUR = (
+MESSAGE_SAISIE_INVALIDE = (
     "Veuillez saisir un salaire brut positif et un nombre de personnes à charge valide."
 )
+BRUT_MAX_SAISIE = 10_000_000
+PERSONNES_MAX_SAISIE = 20
 COOKIE_CONTRIBUTION = "contribution_recente"
 
 
@@ -69,9 +71,10 @@ def format_pct(taux):
 
 def lire_entrees(brut_texte, personnes_texte):
     """Convertit les saisies en nombres ; lève ValueError si elles sont invalides."""
-    brut = float(brut_texte.replace(" ", "").replace(" ", "").replace(",", "."))
+    # Accepte « 12 000,50 », y compris avec l'espace fine insécable des nombres français.
+    brut = float(brut_texte.replace(" ", "").replace("\u202f", "").replace(",", "."))
     personnes = int(personnes_texte or 0)
-    if not 0 < brut <= 10_000_000 or not 0 <= personnes <= 20:
+    if not 0 < brut <= BRUT_MAX_SAISIE or not 0 <= personnes <= PERSONNES_MAX_SAISIE:
         raise ValueError
     return brut, personnes
 
@@ -81,13 +84,13 @@ def simuler(brut, personnes):
     resultat = calcul_salaire(brut, personnes)
     augmentations = []
     for pourcentage in config.AUGMENTATIONS:
-        r = calcul_salaire(brut * (1 + pourcentage / 100), personnes)
-        gain_brut = r["brut"] - resultat["brut"]
-        gain_net = r["net"] - resultat["net"]
+        apres = calcul_salaire(brut * (1 + pourcentage / 100), personnes)
+        gain_brut = apres["brut"] - resultat["brut"]
+        gain_net = apres["net"] - resultat["net"]
         augmentations.append({
             "pourcentage": pourcentage,
-            "brut": r["brut"],
-            "net": r["net"],
+            "brut": apres["brut"],
+            "net": apres["net"],
             "gain_brut": round(gain_brut, 2),
             "gain_net": round(gain_net, 2),
             "part_conservee": round(gain_net / gain_brut * 100, 1) if gain_brut else 0.0,
@@ -109,7 +112,7 @@ def index():
     try:
         simulation = simuler(*lire_entrees(brut, personnes))
     except ValueError:
-        erreur = MESSAGE_ERREUR
+        erreur = MESSAGE_SAISIE_INVALIDE
 
     return render_template(
         "index.html",
@@ -130,7 +133,7 @@ def api_calcul():
             request.args.get("brut", ""), request.args.get("personnes", "0")
         )
     except ValueError:
-        return jsonify(erreur=MESSAGE_ERREUR), 400
+        return jsonify(erreur=MESSAGE_SAISIE_INVALIDE), 400
     return jsonify(simuler(brut, personnes))
 
 
@@ -163,7 +166,7 @@ def api_contributions():
             request.form.get("brut", ""), request.form.get("personnes", "0")
         )
     except ValueError:
-        return jsonify(erreur=MESSAGE_ERREUR), 400
+        return jsonify(erreur=MESSAGE_SAISIE_INVALIDE), 400
 
     if not config.CONTRIBUTION_BRUT_MIN <= brut <= config.CONTRIBUTION_BRUT_MAX:
         return jsonify(erreur=(
@@ -182,8 +185,8 @@ def api_contributions():
             diplome=lire_choix("diplome", config.DIPLOMES),
             est_demo=False,
         )
-    except ValueError as e:
-        return jsonify(erreur=str(e)), 400
+    except ValueError as erreur:
+        return jsonify(erreur=str(erreur)), 400
 
     db.session.add(contribution)
     db.session.commit()

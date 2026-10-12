@@ -52,12 +52,12 @@ def histogramme(valeurs, pas=config.HISTOGRAMME_PAS, maximum=config.HISTOGRAMME_
         fin = None if i == nb_tranches else debut + pas
         tranches.append({"debut": debut, "fin": fin, "nombre": n})
 
-    # On retire les tranches vides au début et à la fin
+    # Les tranches vides aux deux extrémités n'apportent rien au graphique.
     remplies = [i for i, t in enumerate(tranches) if t["nombre"]]
     return tranches[remplies[0]: remplies[-1] + 1]
 
 
-def medianes_par_groupe(contributions, attribut, mesure, minimum=config.STATS_GROUPE_MIN):
+def medianes_par_groupe(contributions, attribut, colonne, minimum=config.STATS_GROUPE_MIN):
     """Médiane par groupe (ville, secteur…), seulement pour les groupes assez grands.
 
     Retourne (groupes affichés triés par médiane décroissante, nombre de groupes masqués).
@@ -66,12 +66,12 @@ def medianes_par_groupe(contributions, attribut, mesure, minimum=config.STATS_GR
     for c in contributions:
         cle = getattr(c, attribut)
         if cle:
-            groupes[cle].append(getattr(c, mesure))
+            groupes[cle].append(getattr(c, colonne))
 
     affiches = [
-        {"nom": nom, "nombre": len(v), "mediane": mediane(v)}
-        for nom, v in groupes.items()
-        if len(v) >= minimum
+        {"nom": nom, "nombre": len(salaires), "mediane": mediane(salaires)}
+        for nom, salaires in groupes.items()
+        if len(salaires) >= minimum
     ]
     affiches.sort(key=lambda g: g["mediane"], reverse=True)
     return affiches, len(groupes) - len(affiches)
