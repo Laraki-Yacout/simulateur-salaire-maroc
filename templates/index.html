@@ -143,8 +143,12 @@
 
           <tr class="group"><th colspan="2" scope="rowgroup">Impôt sur le revenu</th></tr>
           <tr class="memo">
+            <th scope="row">Brut imposable<small>salaire brut moins les cotisations salariales</small></th>
+            <td><span data-money="brut_imposable">{{ m("brut_imposable") }}</span></td>
+          </tr>
+          <tr class="memo">
             <th scope="row">Frais professionnels <span class="rate" data-text="frais_pct">{{ (resultat.taux_frais_pro | pct) if resultat else "" }}</span>
-              <small>déduits de la base imposable, plafond {{ config.FRAIS_PRO_PLAFOND_ANNUEL | dh }}/an</small></th>
+              <small>du brut imposable, plafond {{ config.FRAIS_PRO_PLAFOND_ANNUEL | dh }}/an</small></th>
             <td><span data-money="frais_pro">{{ m("frais_pro") }}</span></td>
           </tr>
           <tr class="memo">

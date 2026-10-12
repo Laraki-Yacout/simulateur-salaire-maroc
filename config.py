@@ -14,10 +14,10 @@ CNSS_PLAFOND_MENSUEL = 6000.0
 # AMO (part salariale), sans plafond
 AMO_TAUX = 0.0226
 
-# Frais professionnels
+# Frais professionnels, calculés sur le brut imposable (brut - cotisations salariales)
 FRAIS_PRO_SEUIL_ANNUEL = 78000.0
-FRAIS_PRO_TAUX_BAS = 0.35   # si brut annuel <= seuil
-FRAIS_PRO_TAUX_HAUT = 0.25  # si brut annuel > seuil
+FRAIS_PRO_TAUX_BAS = 0.35   # si brut imposable annuel <= seuil
+FRAIS_PRO_TAUX_HAUT = 0.25  # si brut imposable annuel > seuil
 FRAIS_PRO_PLAFOND_ANNUEL = 35000.0
 
 # Barème IR annuel (art. 73 CGI) : (borne supérieure, taux, somme à déduire)

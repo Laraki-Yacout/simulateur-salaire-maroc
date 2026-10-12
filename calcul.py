@@ -25,16 +25,21 @@ def calcul_salaire(brut_mensuel, personnes_a_charge=0):
     amo = brut_mensuel * config.AMO_TAUX
     total_cotisations = cnss + ipe + amo
 
-    # Frais professionnels (calculés sur l'année)
-    brut_annuel = brut_mensuel * 12
-    if brut_annuel <= config.FRAIS_PRO_SEUIL_ANNUEL:
+    # Brut imposable : salaire brut moins les cotisations salariales
+    brut_imposable = brut_mensuel - total_cotisations
+    brut_imposable_annuel = brut_imposable * 12
+
+    # Frais professionnels (calculés sur l'année, sur le brut imposable)
+    if brut_imposable_annuel <= config.FRAIS_PRO_SEUIL_ANNUEL:
         taux_frais_pro = config.FRAIS_PRO_TAUX_BAS
     else:
         taux_frais_pro = config.FRAIS_PRO_TAUX_HAUT
-    frais_pro_annuel = min(brut_annuel * taux_frais_pro, config.FRAIS_PRO_PLAFOND_ANNUEL)
+    frais_pro_annuel = min(
+        brut_imposable_annuel * taux_frais_pro, config.FRAIS_PRO_PLAFOND_ANNUEL
+    )
 
     # Revenu net imposable et IR
-    net_imposable_annuel = max(brut_annuel - total_cotisations * 12 - frais_pro_annuel, 0.0)
+    net_imposable_annuel = max(brut_imposable_annuel - frais_pro_annuel, 0.0)
     ir_brut_annuel = calcul_ir_annuel(net_imposable_annuel)
 
     personnes_retenues = min(personnes_a_charge, config.CHARGES_FAMILLE_MAX)
@@ -53,6 +58,7 @@ def calcul_salaire(brut_mensuel, personnes_a_charge=0):
         "ipe": round(ipe, 2),
         "amo": round(amo, 2),
         "total_cotisations": round(total_cotisations, 2),
+        "brut_imposable": round(brut_imposable, 2),
         "taux_frais_pro": taux_frais_pro,
         "frais_pro": round(frais_pro_annuel / 12, 2),
         "net_imposable": round(net_imposable_annuel / 12, 2),

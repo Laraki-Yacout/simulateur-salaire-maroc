@@ -16,7 +16,7 @@ def test_api_calcul_renvoie_le_resultat_de_calcul_py(client):
     assert reponse.status_code == 200
     data = reponse.get_json()
     assert data["resultat"] == calcul_salaire(12000, 2)
-    assert data["resultat"]["net"] == pytest.approx(10481.08, abs=0.01)
+    assert data["resultat"]["net"] == pytest.approx(10462.54, abs=0.01)
 
 
 def test_api_calcul_scenarios_augmentation(client):
@@ -27,13 +27,13 @@ def test_api_calcul_scenarios_augmentation(client):
     assert plus_10["brut"] == 13200
     assert plus_10["net"] == calcul_salaire(13200, 0)["net"]
     assert plus_10["gain_brut"] == 1200
-    assert plus_10["gain_net"] == pytest.approx(plus_10["net"] - 10381.08, abs=0.01)
+    assert plus_10["gain_net"] == pytest.approx(plus_10["net"] - 10362.54, abs=0.01)
     assert 0 < plus_10["part_conservee"] < 100
 
 
 def test_api_calcul_accepte_la_virgule(client):
     data = client.get("/api/calcul?brut=6500,00").get_json()
-    assert data["resultat"]["net"] == pytest.approx(6026.44, abs=0.01)
+    assert data["resultat"]["net"] == pytest.approx(6011.49, abs=0.01)
 
 
 @pytest.mark.parametrize("requete", [

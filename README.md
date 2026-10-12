@@ -26,6 +26,7 @@ Tests : `pytest`
 | `models.py` | Table `contributions` (aucune donnée personnelle) |
 | `statistiques.py` | Médiane, quartiles, histogramme, médianes par groupe |
 | `seed_demo.py` | Génère des contributions fictives (`est_demo = True`) |
+| `recalculer_nets.py` | Recalcule les salaires nets enregistrés après un changement de règle de calcul |
 | `analyse/` | Notebook d'analyse des données |
 
 La base est un fichier SQLite dans `instance/`, ou la base indiquée par la variable
