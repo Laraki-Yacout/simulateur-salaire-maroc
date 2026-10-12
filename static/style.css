@@ -31,9 +31,10 @@ body {
 }
 
 .wrap {
-  max-width: 1120px;
-  margin: 0 auto;
-  padding: 0 20px;
+  width: 100%;
+  max-width: 1100px;
+  margin-inline: auto;
+  padding-inline: 20px;
 }
 
 .sr-only {
@@ -53,8 +54,9 @@ button { font: inherit; color: inherit; cursor: pointer; }
 
 /* ---------- En-tête ---------- */
 .masthead {
-  padding: 48px 0 36px;
+  padding: 48px 0 40px;
   border-bottom: 1px solid var(--filet);
+  text-align: center;
 }
 
 .kicker {
@@ -81,7 +83,7 @@ h1 em { font-style: italic; font-weight: 400; color: var(--bordeaux); }
 
 .lede {
   max-width: 36em;
-  margin: 18px 0 0;
+  margin: 18px auto 0;
   font-size: 1.08rem;
   color: var(--encre-douce);
 }
@@ -89,7 +91,7 @@ h1 em { font-style: italic; font-weight: 400; color: var(--bordeaux); }
 /* ---------- Grille principale ---------- */
 .page {
   display: grid;
-  grid-template-columns: 1fr;
+  grid-template-columns: minmax(0, 1fr);
   grid-template-areas: "inputs" "statement" "contrib" "raise";
   gap: 40px;
   padding-top: 36px;
@@ -101,15 +103,29 @@ h1 em { font-style: italic; font-weight: 400; color: var(--bordeaux); }
 .raise { grid-area: raise; }
 .contrib { grid-area: contrib; }
 
+/* Sur téléphone, la colonne latérale s'efface : ses blocs suivent l'ordre de la grille */
+.sidebar { display: contents; }
+
 @media (min-width: 900px) {
   .page {
-    grid-template-columns: minmax(300px, 360px) 1fr;
-    grid-template-areas: "inputs statement" "raise statement" ". contrib";
-    grid-template-rows: auto 1fr auto;
-    column-gap: 72px;
-    row-gap: 40px;
+    grid-template-columns: minmax(300px, 340px) minmax(0, 1fr);
+    grid-template-areas: "sidebar statement" "sidebar contrib";
+    grid-template-rows: auto 1fr;
+    column-gap: 64px;
+    row-gap: 48px;
   }
-  .raise { align-self: start; }
+  /* Saisie et augmentation restent visibles pendant la lecture du relevé */
+  .sidebar {
+    grid-area: sidebar;
+    display: flex;
+    flex-direction: column;
+    gap: 40px;
+    align-self: start;
+  }
+}
+
+@media (min-width: 900px) and (min-height: 800px) {
+  .sidebar { position: sticky; top: 24px; }
 }
 
 .section-title {
@@ -153,6 +169,7 @@ label {
 
 .amount-input input {
   flex: 1;
+  width: 100%;
   min-width: 0;
   padding: 4px 0 6px;
   border: 0;
@@ -614,6 +631,7 @@ label {
 /* ---------- Navigation ---------- */
 .topnav {
   display: flex;
+  justify-content: center;
   gap: 24px;
   margin-bottom: 28px;
 }
@@ -921,14 +939,59 @@ select:focus-visible { outline: 2px solid var(--bordeaux); outline-offset: 3px; 
 
 /* ---------- Pied de page ---------- */
 .colophon {
-  padding-top: 20px;
-  padding-bottom: 40px;
+  padding: 28px 0 40px;
   border-top: 1px solid var(--filet);
   font-size: .85rem;
   color: var(--encre-douce);
+  text-align: center;
 }
 
-.colophon p { max-width: 46em; margin: 0; }
+.colophon-note p { max-width: 46em; margin: 0 auto; }
+
+.credits {
+  margin-top: 22px;
+  padding-top: 18px;
+  border-top: 1px solid var(--filet);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+}
+
+.signature {
+  margin: 0;
+  font-family: var(--serif);
+  font-style: italic;
+  font-size: .98rem;
+  color: var(--encre-douce);
+}
+
+.signature span { font-style: normal; font-weight: 600; color: var(--bordeaux-fonce); }
+
+.credits-links {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.credits-links li + li::before {
+  content: "\B7";
+  margin: 0 12px;
+  color: var(--rose);
+}
+
+.credits-links a {
+  color: var(--bordeaux);
+  font-weight: 600;
+  text-decoration: none;
+  border-bottom: 1px solid transparent;
+  transition: border-color .15s, color .15s;
+}
+
+.credits-links a:hover { color: var(--bordeaux-fonce); border-bottom-color: currentColor; }
 
 /* ---------- Petits écrans ---------- */
 @media (max-width: 420px) {

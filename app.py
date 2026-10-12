@@ -2,7 +2,7 @@
 
 import os
 
-from flask import Flask, jsonify, render_template, request
+from flask import Flask, jsonify, render_template, request, url_for
 
 import config
 import statistiques
@@ -33,6 +33,18 @@ app.config["SQLALCHEMY_DATABASE_URI"] = adresse_base()
 db.init_app(app)
 with app.app_context():
     db.create_all()
+
+
+@app.context_processor
+def outils_gabarits():
+    def asset(nom):
+        """URL d'un fichier statique avec sa date de modification : le navigateur
+        recharge automatiquement le fichier quand il change."""
+        chemin = os.path.join(app.static_folder, nom)
+        version = int(os.path.getmtime(chemin)) if os.path.exists(chemin) else 0
+        return url_for("static", filename=nom, v=version)
+
+    return {"asset": asset}
 
 
 @app.template_filter("dh")

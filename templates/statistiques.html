@@ -138,6 +138,6 @@
 {% block scripts %}
   {% if resume %}
   <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js" defer></script>
-  <script src="{{ url_for('static', filename='statistiques.js') }}" defer></script>
+  <script src="{{ asset('statistiques.js') }}" defer></script>
   {% endif %}
 {% endblock %}

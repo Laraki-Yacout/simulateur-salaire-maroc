@@ -7,7 +7,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400..700;1,9..144,400..600&family=Source+Sans+3:wght@400;500;600;700&display=swap">
-  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+  <link rel="stylesheet" href="{{ asset('style.css') }}">
   <script>document.documentElement.classList.add("js");</script>
 </head>
 <body>
@@ -24,8 +24,18 @@
 
   {% block contenu %}{% endblock %}
 
-  <footer class="wrap colophon">
-    {% block pied %}{% endblock %}
+  <footer class="colophon">
+    <div class="wrap">
+      <div class="colophon-note">{% block pied %}{% endblock %}</div>
+      <div class="credits">
+        <p class="signature">Conçu et développé par <span>Laraki</span></p>
+        <ul class="credits-links">
+          <li><a href="#">LinkedIn</a></li>
+          <li><a href="#">GitHub</a></li>
+          <li><a href="#">Voir l'analyse des données</a></li>
+        </ul>
+      </div>
+    </div>
   </footer>
 
   {% block scripts %}{% endblock %}

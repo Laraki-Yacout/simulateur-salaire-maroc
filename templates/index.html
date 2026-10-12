@@ -11,6 +11,7 @@
 {%- macro part(cle) -%}{{ ((resultat[cle] / resultat.brut * 100) | round(2)) if resultat else 0 }}{%- endmacro -%}
 {%- set aug = augmentations[1] if augmentations|length > 1 else None -%}
   <main class="wrap page">
+    <div class="sidebar">
     <section class="inputs" aria-labelledby="t-donnees">
       <h2 class="section-title" id="t-donnees"><span class="num">I.</span> Vos données</h2>
 
@@ -46,6 +47,32 @@
         <button type="submit" class="submit">Calculer</button>
       </form>
     </section>
+
+    <aside class="raise" aria-labelledby="t-raise">
+      <h2 id="t-raise">Et si j'étais augmenté&nbsp;?</h2>
+      <div class="raise-choices" role="group" aria-label="Pourcentage d'augmentation">
+        {% for pct in config.AUGMENTATIONS %}
+          <button type="button" data-raise="{{ pct }}" aria-pressed="{{ 'true' if aug and pct == aug.pourcentage else 'false' }}">+{{ pct }}&nbsp;%</button>
+        {% endfor %}
+      </div>
+      <dl class="raise-figures">
+        <div>
+          <dt>Hausse du brut</dt>
+          <dd>+&nbsp;<span data-raise-field="gain_brut">{{ (aug.gain_brut | dh) if aug else "—" }}</span></dd>
+        </div>
+        <div class="raise-main">
+          <dt>Ce que vous touchez vraiment</dt>
+          <dd>+&nbsp;<span data-raise-field="gain_net">{{ (aug.gain_net | dh) if aug else "—" }}</span></dd>
+        </div>
+      </dl>
+      <p class="raise-note">
+        Sur 100 DH d'augmentation, vous en gardez
+        <strong data-raise-field="part_conservee">{{ (aug.part_conservee | string | replace(".", ",") ~ " DH") if aug else "—" }}</strong>.
+        Nouveau net&nbsp;: <strong data-raise-field="net">{{ (aug.net | dh) if aug else "—" }}</strong>
+        <span data-periode-label-court>par mois</span>.
+      </p>
+    </aside>
+    </div>
 
     <section class="statement" aria-labelledby="t-net">
       <div class="statement-head">
@@ -146,31 +173,6 @@
       </table>
     </section>
 
-    <aside class="raise" aria-labelledby="t-raise">
-      <h2 id="t-raise">Et si j'étais augmenté&nbsp;?</h2>
-      <div class="raise-choices" role="group" aria-label="Pourcentage d'augmentation">
-        {% for pct in config.AUGMENTATIONS %}
-          <button type="button" data-raise="{{ pct }}" aria-pressed="{{ 'true' if aug and pct == aug.pourcentage else 'false' }}">+{{ pct }}&nbsp;%</button>
-        {% endfor %}
-      </div>
-      <dl class="raise-figures">
-        <div>
-          <dt>Hausse du brut</dt>
-          <dd>+&nbsp;<span data-raise-field="gain_brut">{{ (aug.gain_brut | dh) if aug else "—" }}</span></dd>
-        </div>
-        <div class="raise-main">
-          <dt>Ce que vous touchez vraiment</dt>
-          <dd>+&nbsp;<span data-raise-field="gain_net">{{ (aug.gain_net | dh) if aug else "—" }}</span></dd>
-        </div>
-      </dl>
-      <p class="raise-note">
-        Sur 100 DH d'augmentation, vous en gardez
-        <strong data-raise-field="part_conservee">{{ (aug.part_conservee | string | replace(".", ",") ~ " DH") if aug else "—" }}</strong>.
-        Nouveau net&nbsp;: <strong data-raise-field="net">{{ (aug.net | dh) if aug else "—" }}</strong>
-        <span data-periode-label-court>par mois</span>.
-      </p>
-    </aside>
-
     <section class="contrib" aria-labelledby="t-contrib">
       <h2 class="section-title" id="t-contrib"><span class="num">III.</span> Contribuer aux statistiques</h2>
       {% if deja_contribue %}
@@ -220,5 +222,5 @@
 {% endblock %}
 
 {% block scripts %}
-  <script src="{{ url_for('static', filename='app.js') }}" defer></script>
+  <script src="{{ asset('app.js') }}" defer></script>
 {% endblock %}
