@@ -18,22 +18,56 @@ BRUT_MAX_SAISIE = 10_000_000
 PERSONNES_MAX_SAISIE = 20
 COOKIE_CONTRIBUTION = "contribution_recente"
 
+# Render définit toujours la variable RENDER sur ses serveurs.
+EN_PRODUCTION = "RENDER" in os.environ
+CLE_SECRETE_LOCALE = "cle-de-developpement-local-uniquement"
+
+
+def normaliser_url_base(url):
+    """Force le pilote psycopg 3 : SQLAlchemy choisirait sinon psycopg2, non installé.
+
+    Accepte aussi l'ancien préfixe « postgres:// » que donnent certains hébergeurs.
+    """
+    for prefixe in ("postgres://", "postgresql://"):
+        if url.startswith(prefixe):
+            return "postgresql+psycopg://" + url[len(prefixe):]
+    return url
+
 
 def adresse_base():
-    """DATABASE_URL si elle existe (ex. PostgreSQL), sinon SQLite dans instance/."""
+    """DATABASE_URL si elle existe (PostgreSQL Supabase en ligne), sinon SQLite dans instance/."""
     url = os.environ.get("DATABASE_URL")
     if url:
-        # Certains hébergeurs fournissent encore l'ancien préfixe « postgres:// »
-        if url.startswith("postgres://"):
-            url = "postgresql://" + url[len("postgres://"):]
-        return url
+        return normaliser_url_base(url)
     os.makedirs(app.instance_path, exist_ok=True)
     return "sqlite:///" + os.path.join(app.instance_path, "simulateur.db")
 
 
+def options_moteur(url):
+    # pool_pre_ping écarte les connexions coupées par Supabase pendant une période d'inactivité.
+    options = {"pool_pre_ping": True}
+    if url.startswith("postgresql+psycopg://"):
+        # Le pooler de Supabase en mode « transaction » ne supporte pas les requêtes
+        # préparées que psycopg crée automatiquement : on les désactive.
+        options["connect_args"] = {"prepare_threshold": None}
+    return options
+
+
+def cle_secrete():
+    cle = os.environ.get("SECRET_KEY")
+    if cle:
+        return cle
+    if EN_PRODUCTION:
+        raise RuntimeError("La variable d'environnement SECRET_KEY doit être définie sur Render.")
+    return CLE_SECRETE_LOCALE
+
+
+app.config["SECRET_KEY"] = cle_secrete()
 app.config["SQLALCHEMY_DATABASE_URI"] = adresse_base()
+app.config["SQLALCHEMY_ENGINE_OPTIONS"] = options_moteur(app.config["SQLALCHEMY_DATABASE_URI"])
 db.init_app(app)
 with app.app_context():
+    # Ne crée que les tables absentes : sans effet sur une base déjà en place.
     db.create_all()
 
 
@@ -196,7 +230,7 @@ def api_contributions():
     reponse.set_cookie(
         COOKIE_CONTRIBUTION, "1",
         max_age=config.CONTRIBUTION_DELAI_HEURES * 3600,
-        httponly=True, samesite="Lax",
+        httponly=True, samesite="Lax", secure=EN_PRODUCTION,
     )
     return reponse
 
@@ -260,4 +294,4 @@ def page_statistiques():
 
 
 if __name__ == "__main__":
-    app.run(debug=True)
+    app.run(debug=not EN_PRODUCTION)

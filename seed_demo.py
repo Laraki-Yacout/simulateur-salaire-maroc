@@ -23,6 +23,8 @@ import statistics
 from collections import defaultdict, namedtuple
 from datetime import date, timedelta
 
+from sqlalchemy.engine import make_url
+
 import config
 from app import app
 from calcul import calcul_salaire
@@ -213,7 +215,8 @@ def main():
             print(f"Données de démo ajoutées   : {len(contributions)} (graine {graine})")
         print(f"Contributions réelles      : {reelles} (conservées)")
         print(f"Contributions en base      : {total}")
-        print(f"Base utilisée              : {app.config['SQLALCHEMY_DATABASE_URI']}")
+        adresse = make_url(app.config["SQLALCHEMY_DATABASE_URI"]).render_as_string(hide_password=True)
+        print(f"Base utilisée              : {adresse}")
 
 
 if __name__ == "__main__":

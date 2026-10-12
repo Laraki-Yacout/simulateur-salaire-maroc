@@ -32,6 +32,30 @@ Tests : `pytest`
 La base est un fichier SQLite dans `instance/`, ou la base indiquée par la variable
 d'environnement `DATABASE_URL`.
 
+## Mise en ligne (Render + Supabase)
+
+Service web Render :
+
+- **Build command** : `pip install -r requirements.txt`
+- **Start command** : `gunicorn app:app`
+- Version de Python : fixée par `.python-version` (3.13)
+
+Variables d'environnement à définir dans Render (jamais dans le code) :
+
+| Variable | Valeur |
+|---|---|
+| `DATABASE_URL` | Chaîne de connexion Supabase (*Connect* → *Session pooler*, compatible IPv4) |
+| `SECRET_KEY` | Une longue valeur aléatoire, par exemple `python -c "import secrets; print(secrets.token_hex(32))"` |
+
+Les tables sont créées automatiquement au premier démarrage. Pour ajouter les données de
+démonstration dans Supabase, depuis votre PC :
+
+```powershell
+$env:DATABASE_URL = "<chaîne de connexion Supabase>"
+python seed_demo.py
+Remove-Item Env:DATABASE_URL
+```
+
 ## Analyse des données
 
 Le notebook [`analyse/analyse_salaires.ipynb`](analyse/analyse_salaires.ipynb) explore les salaires
