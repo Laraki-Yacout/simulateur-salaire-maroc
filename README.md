@@ -27,28 +27,30 @@ Tests : `pytest`
 | `statistiques.py` | Médiane, quartiles, histogramme, médianes par groupe |
 | `seed_demo.py` | Génère des contributions fictives (`est_demo = True`) |
 | `recalculer_nets.py` | Recalcule les salaires nets enregistrés après un changement de règle de calcul |
+| `public/static/` | CSS et JavaScript, servis par le CDN de Vercel (et par Flask en local) |
+| `vercel.json` | Fichiers exclus de la fonction Vercel |
 | `analyse/` | Notebook d'analyse des données |
 
 La base est un fichier SQLite dans `instance/`, ou la base indiquée par la variable
 d'environnement `DATABASE_URL`.
 
-## Mise en ligne (Render + Supabase)
+## Mise en ligne (Vercel + Supabase)
 
-Service web Render :
+Vercel détecte Flask tout seul : il charge la variable `app` du fichier `app.py`, installe
+`requirements.txt` et utilise la version de Python de `.python-version` (3.14). Il suffit
+d'importer le dépôt GitHub dans Vercel, sans réglage de build.
 
-- **Build command** : `pip install -r requirements.txt`
-- **Start command** : `gunicorn app:app`
-- Version de Python : fixée par `.python-version` (3.13)
-
-Variables d'environnement à définir dans Render (jamais dans le code) :
+Variables d'environnement à définir dans Vercel, *Settings* → *Environment Variables*
+(jamais dans le code) :
 
 | Variable | Valeur |
 |---|---|
-| `DATABASE_URL` | Chaîne de connexion Supabase (*Connect* → *Session pooler*, compatible IPv4) |
+| `DATABASE_URL` | Chaîne de connexion Supabase : *Connect* → *Transaction pooler* (port 6543) |
 | `SECRET_KEY` | Une longue valeur aléatoire, par exemple `python -c "import secrets; print(secrets.token_hex(32))"` |
 
-Les tables sont créées automatiquement au premier démarrage. Pour ajouter les données de
-démonstration dans Supabase, depuis votre PC :
+L'application s'adapte au *Transaction pooler* : aucune connexion gardée ouverte entre deux
+requêtes (`NullPool`) et pas de requêtes préparées. Les tables sont créées automatiquement
+au premier appel. Pour ajouter les données de démonstration dans Supabase, depuis votre PC :
 
 ```powershell
 $env:DATABASE_URL = "<chaîne de connexion Supabase>"

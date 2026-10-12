@@ -3,13 +3,16 @@
 import os
 
 from flask import Flask, jsonify, render_template, request, url_for
+from sqlalchemy.pool import NullPool
 
 import config
 import statistiques
 from calcul import calcul_salaire
 from models import Contribution, db
 
-app = Flask(__name__)
+# Sur Vercel, les fichiers statiques doivent être dans public/ : le CDN les sert
+# directement à l'adresse /static/…, et Flask fait de même en local.
+app = Flask(__name__, static_folder="public/static", static_url_path="/static")
 
 MESSAGE_SAISIE_INVALIDE = (
     "Veuillez saisir un salaire brut positif et un nombre de personnes à charge valide."
@@ -18,8 +21,8 @@ BRUT_MAX_SAISIE = 10_000_000
 PERSONNES_MAX_SAISIE = 20
 COOKIE_CONTRIBUTION = "contribution_recente"
 
-# Render définit toujours la variable RENDER sur ses serveurs.
-EN_PRODUCTION = "RENDER" in os.environ
+# Vercel définit la variable VERCEL pendant la construction et l'exécution.
+EN_PRODUCTION = "VERCEL" in os.environ
 CLE_SECRETE_LOCALE = "cle-de-developpement-local-uniquement"
 
 
@@ -39,18 +42,22 @@ def adresse_base():
     url = os.environ.get("DATABASE_URL")
     if url:
         return normaliser_url_base(url)
+    if EN_PRODUCTION:
+        # Le disque de Vercel est en lecture seule et effacé à chaque instance :
+        # une base SQLite y serait impossible à créer, ou perdue.
+        raise RuntimeError("La variable d'environnement DATABASE_URL doit être définie sur Vercel.")
     os.makedirs(app.instance_path, exist_ok=True)
     return "sqlite:///" + os.path.join(app.instance_path, "simulateur.db")
 
 
 def options_moteur(url):
-    # pool_pre_ping écarte les connexions coupées par Supabase pendant une période d'inactivité.
-    options = {"pool_pre_ping": True}
     if url.startswith("postgresql+psycopg://"):
-        # Le pooler de Supabase en mode « transaction » ne supporte pas les requêtes
-        # préparées que psycopg crée automatiquement : on les désactive.
-        options["connect_args"] = {"prepare_threshold": None}
-    return options
+        # Fonctions serverless + « Transaction pooler » de Supabase (port 6543) :
+        # c'est le pooler qui partage les connexions, l'application n'en garde aucune
+        # ouverte (NullPool). Ce pooler ne supporte pas les requêtes préparées que
+        # psycopg crée automatiquement : on les désactive.
+        return {"poolclass": NullPool, "connect_args": {"prepare_threshold": None}}
+    return {"pool_pre_ping": True}
 
 
 def cle_secrete():
@@ -58,7 +65,7 @@ def cle_secrete():
     if cle:
         return cle
     if EN_PRODUCTION:
-        raise RuntimeError("La variable d'environnement SECRET_KEY doit être définie sur Render.")
+        raise RuntimeError("La variable d'environnement SECRET_KEY doit être définie sur Vercel.")
     return CLE_SECRETE_LOCALE
 
 
