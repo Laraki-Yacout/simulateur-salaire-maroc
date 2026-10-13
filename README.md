@@ -97,7 +97,7 @@ jupyter notebook analyse_salaires.ipynb
 
 ## Installation en local
 
-Prérequis : Python 3.14.
+Prérequis : Python 3.13 ou plus récent.
 
 ```bash
 git clone https://github.com/Laraki-Yacout/simulateur-salaire-maroc.git
