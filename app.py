@@ -242,6 +242,19 @@ def api_contributions():
     return reponse
 
 
+@app.get("/api/sante")
+def api_sante():
+    """Vérifie que la base répond. Appelée chaque jour par le cron de Vercel
+    (vercel.json) : Supabase met en pause les projets gratuits inactifs."""
+    try:
+        db.session.scalar(db.select(db.func.count()).select_from(Contribution))
+    except Exception:
+        # Aucun détail renvoyé : le message d'erreur pourrait contenir l'adresse de la base.
+        app.logger.exception("La base de données ne répond pas.")
+        return jsonify(statut="erreur", base="indisponible"), 503
+    return jsonify(statut="ok", base="ok")
+
+
 def etiquette_k(montant):
     """7500 -> « 7,5 k »."""
     return f"{montant / 1000:g}".replace(".", ",") + " k"

@@ -2,7 +2,13 @@
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "functions": {
     "app.py": {
-      "excludeFiles": "{tests/**,analyse/**,public/**,instance/**}"
+      "excludeFiles": "{tests/**,analyse/**,public/**,instance/**,docs/**}"
     }
-  }
+  },
+  "crons": [
+    {
+      "path": "/api/sante",
+      "schedule": "0 6 * * *"
+    }
+  ]
 }

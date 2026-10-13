@@ -1,89 +1,165 @@
 # Simulateur de salaire net — Maroc 2026
 
-Application Flask qui calcule le salaire net mensuel à partir du brut (CNSS, IPE, AMO,
-frais professionnels, impôt sur le revenu, charges de famille), avec un calcul en temps réel,
-et qui permet de partager anonymement son salaire pour alimenter une page de statistiques.
+Calcule en temps réel le salaire net d'un salarié marocain à partir de son brut, ligne par ligne, et
+permet de partager anonymement son salaire pour construire des statistiques ouvertes.
 
-## Lancer le site
+**Site en ligne : [simulateur-salaire-maroc.vercel.app](https://simulateur-salaire-maroc.vercel.app)**
 
-```powershell
-py -3.14 -m venv venv
-.\venv\Scripts\Activate.ps1
-pip install -r requirements.txt
-python seed_demo.py   # facultatif : 300 contributions fictives
-python app.py         # puis ouvrir http://127.0.0.1:5000
+![Page d'accueil : saisie du salaire brut et relevé détaillé du calcul](docs/accueil.png)
+
+| Statistiques des salaires partagés | Analyse des données (notebook) |
+|---|---|
+| ![Page des statistiques : chiffres clés, histogramme et médianes par ville et par secteur](docs/statistiques.png) | ![Notebook : taux de prélèvement moyen et marginal de 3 000 à 50 000 DH](docs/notebook.png) |
+
+## Fonctionnalités
+
+- **Calcul brut → net** conforme aux règles 2026 : CNSS et indemnité pour perte d'emploi (plafonnées
+  à 6 000 DH), AMO, frais professionnels, barème progressif de l'impôt sur le revenu (art. 73 CGI),
+  réduction pour charges de famille.
+- **Relevé détaillé**, mis à jour pendant la saisie, en vue mensuelle ou annuelle, avec la
+  répartition du brut entre net, cotisations et impôt.
+- **Scénarios d'augmentation** (+5 %, +10 %, +20 %) : combien de dirhams d'une augmentation
+  arrivent réellement sur la fiche de paie.
+- **Contribution anonyme** de son salaire, avec ville, secteur, expérience et diplôme facultatifs.
+- **Page de statistiques** : médiane, moyenne, quartiles, histogramme, médianes par ville et par
+  secteur, en brut ou en net, avec ou sans les données de démonstration.
+- **API JSON** : `/api/calcul`, `/api/contributions` et `/api/sante`.
+
+## Stack technique
+
+| Domaine | Outils |
+|---|---|
+| Application web | Python, Flask, Jinja2 |
+| Données | SQLAlchemy ; PostgreSQL hébergé sur Supabase en production, SQLite en local |
+| Interface | HTML, CSS, JavaScript sans framework, Chart.js |
+| Analyse | Jupyter, pandas, numpy, matplotlib |
+| Tests | pytest |
+| Hébergement | Vercel (fonction Python serverless, CDN pour les fichiers statiques, cron quotidien) |
+
+Tous les paramètres légaux (taux, plafonds, barème) sont regroupés dans `config.py` : une mise à
+jour de la loi de finances ne demande de modifier que ce fichier.
+
+## Validation du calcul
+
+Les résultats ont été comparés, salaire par salaire, à ceux d'un simulateur de référence. Un écart
+d'environ **50 DH par mois** est apparu sur certains salaires (51 DH pour un brut de 6 600 DH, par
+exemple).
+
+**Cause.** Les frais professionnels étaient calculés sur le salaire brut. Or, selon l'article 59 du
+Code général des impôts, ils se calculent sur le **brut imposable**, c'est-à-dire le brut diminué
+des cotisations salariales (CNSS, IPE, AMO). Le seuil de 78 000 DH par an, qui fait passer le taux
+de 35 % à 25 %, et le plafond de 35 000 DH s'appliquent donc eux aussi au brut imposable.
+
+**Correction.**
+
+- la formule de `calcul.py` utilise désormais le brut imposable, affiché aussi dans le relevé ;
+- des tests ont été ajoutés autour du seuil (6 500, 6 600, 6 936 et 6 937 DH brut) et les valeurs
+  attendues des tests existants ont été recalculées ;
+- le script `recalculer_nets.py` recalcule les salaires nets déjà enregistrés dans la base.
+
+
+## Analyse des données
+
+Le notebook [`analyse/analyse_salaires.ipynb`](analyse/analyse_salaires.ipynb) répond à deux
+questions : quel est le salaire typique des contributeurs, et qu'est-ce qui le fait varier ? Il
+couvre la qualité des données, le nettoyage des valeurs aberrantes (méthode de l'écart
+interquartile), les statistiques descriptives, les médianes par groupe et le taux de prélèvement
+effectif de 3 000 à 50 000 DH.
+
+**Effet de seuil découvert.** Le passage des frais professionnels de 35 % à 25 % se fait d'un coup,
+pour un brut d'environ 6 937 DH par mois. Juste à ce niveau, une augmentation **fait baisser** le
+salaire net : de 6 936 à 6 937 DH brut, le net passe de 6 409,94 DH à 6 345,86 DH, soit 64 DH de
+moins pour 1 DH de plus. Il faut 72 DH bruts supplémentaires (7 008 DH) pour retrouver le net de
+départ. Le taux marginal de prélèvement atteint alors 74 %, contre moins de 40 % sur tout le reste
+de la plage étudiée. Le barème de l'impôt lui-même ne présente pas ce défaut : c'est l'abattement
+pour frais professionnels, en marche d'escalier, qui le provoque.
+
+Pour ouvrir le notebook en local, depuis le dossier `analyse/` (il lit `../instance/simulateur.db`) :
+
+```bash
+cd analyse
+jupyter notebook analyse_salaires.ipynb
 ```
 
-Tests : `pytest`
+## Confidentialité
 
-## Organisation
+- **Contributions anonymes** : seuls le brut, le net calculé, le nombre de personnes à charge et
+  les critères choisis sont enregistrés. Aucun nom, e-mail ou adresse IP n'est stocké.
+- **Consentement explicite** : rien n'est enregistré lors d'une simple simulation. Le salaire n'est
+  ajouté qu'après un clic sur un bouton dédié et une case de consentement cochée.
+- **Groupes de 5 minimum** : une ville ou un secteur n'apparaît dans les statistiques qu'à partir
+  de 5 contributions, pour qu'aucune personne ne soit reconnaissable.
+- **Base protégée** : la sécurité au niveau des lignes (Row Level Security) est activée sur
+  Supabase, ce qui bloque tout accès à la table par l'API publique de Supabase. Seule l'application,
+  côté serveur, lit et écrit les données.
+- Une contribution par navigateur toutes les 24 heures, et seuls les bruts entre 2 500 et
+  200 000 DH sont acceptés, pour limiter les abus.
+
+## Installation en local
+
+Prérequis : Python 3.14.
+
+```bash
+git clone https://github.com/Laraki-Yacout/simulateur-salaire-maroc.git
+cd simulateur-salaire-maroc
+python -m venv venv
+venv\Scripts\activate          # macOS / Linux : source venv/bin/activate
+pip install -r requirements.txt
+python seed_demo.py            # facultatif : 300 contributions fictives
+python app.py                  # puis ouvrir http://127.0.0.1:5000
+```
+
+En local, l'application utilise un fichier SQLite créé automatiquement dans `instance/`. Les tests
+se lancent avec `pytest`.
+
+## Mise en ligne
+
+Le site est hébergé sur Vercel, qui détecte Flask, installe `requirements.txt` et utilise la version
+de Python indiquée dans `.python-version`. Deux variables d'environnement sont à définir dans
+Vercel :
+
+| Variable | Valeur |
+|---|---|
+| `DATABASE_URL` | Chaîne de connexion Supabase, *Transaction pooler* (port 6543) |
+| `SECRET_KEY` | Une longue valeur aléatoire : `python -c "import secrets; print(secrets.token_hex(32))"` |
+
+L'application est adaptée au *Transaction pooler* : aucune connexion gardée ouverte entre deux
+requêtes et pas de requêtes préparées. Les tables sont créées au premier appel.
+
+**Maintien en activité.** Supabase met en pause les projets gratuits après une semaine sans
+activité. Un cron Vercel, déclaré dans `vercel.json`, appelle chaque jour à 6 h (UTC) la route
+`/api/sante`, qui interroge la base. Une exécution par jour est le maximum autorisé par l'offre
+Hobby de Vercel, et largement suffisant ici.
+
+## Organisation du code
 
 | Fichier | Rôle |
 |---|---|
 | `config.py` | Paramètres légaux 2026 et réglages du site |
 | `calcul.py` | Calcul brut → net |
-| `app.py` | Routes Flask, API JSON `/api/calcul` et `/api/contributions`, page `/statistiques` |
+| `app.py` | Routes Flask, API JSON, page de statistiques |
 | `models.py` | Table `contributions` (aucune donnée personnelle) |
 | `statistiques.py` | Médiane, quartiles, histogramme, médianes par groupe |
-| `seed_demo.py` | Génère des contributions fictives (`est_demo = True`) |
-| `recalculer_nets.py` | Recalcule les salaires nets enregistrés après un changement de règle de calcul |
-| `public/static/` | CSS et JavaScript, servis par le CDN de Vercel (et par Flask en local) |
-| `vercel.json` | Fichiers exclus de la fonction Vercel |
+| `seed_demo.py` | Génère des contributions fictives, marquées comme telles |
+| `recalculer_nets.py` | Recalcule les nets enregistrés après un changement de règle de calcul |
+| `public/static/` | CSS et JavaScript, servis par le CDN de Vercel |
 | `analyse/` | Notebook d'analyse des données |
+| `tests/` | Tests pytest (calcul, API, contributions, statistiques, déploiement) |
 
-La base est un fichier SQLite dans `instance/`, ou la base indiquée par la variable
-d'environnement `DATABASE_URL`.
+## Limites
 
-## Mise en ligne (Vercel + Supabase)
+- **Échantillon non représentatif** : seuls les visiteurs du site contribuent, et seulement s'ils le
+  souhaitent. Ce sont probablement des personnes plus connectées, plus urbaines et plus diplômées
+  que la moyenne des salariés marocains.
+- **Données de démonstration** : tant que les contributions réelles sont peu nombreuses, la base
+  contient 300 salaires fictifs, signalés sur la page de statistiques et exclus d'un clic. Les
+  conclusions chiffrées du notebook sont alors illustratives : elles montrent la méthode, pas la
+  réalité du marché.
+- **Déclarations non vérifiées** : chacun saisit son brut librement ; les contrôles du site limitent
+  les abus sans les empêcher.
+- **Calcul indicatif** : le simulateur ne gère pas les primes, les indemnités exonérées, les heures
+  supplémentaires ni la retraite complémentaire.
 
-Vercel détecte Flask tout seul : il charge la variable `app` du fichier `app.py`, installe
-`requirements.txt` et utilise la version de Python de `.python-version` (3.14). Il suffit
-d'importer le dépôt GitHub dans Vercel, sans réglage de build.
+## Auteur
 
-Variables d'environnement à définir dans Vercel, *Settings* → *Environment Variables*
-(jamais dans le code) :
-
-| Variable | Valeur |
-|---|---|
-| `DATABASE_URL` | Chaîne de connexion Supabase : *Connect* → *Transaction pooler* (port 6543) |
-| `SECRET_KEY` | Une longue valeur aléatoire, par exemple `python -c "import secrets; print(secrets.token_hex(32))"` |
-
-L'application s'adapte au *Transaction pooler* : aucune connexion gardée ouverte entre deux
-requêtes (`NullPool`) et pas de requêtes préparées. Les tables sont créées automatiquement
-au premier appel. Pour ajouter les données de démonstration dans Supabase, depuis votre PC :
-
-```powershell
-$env:DATABASE_URL = "<chaîne de connexion Supabase>"
-python seed_demo.py
-Remove-Item Env:DATABASE_URL
-```
-
-## Analyse des données
-
-Le notebook [`analyse/analyse_salaires.ipynb`](analyse/analyse_salaires.ipynb) explore les salaires
-partagés sur le site pour répondre à deux questions : **quel est le salaire typique des
-utilisateurs, et qu'est-ce qui le fait varier ?**
-
-Il suit une démarche d'analyse complète :
-
-1. contexte et question ;
-2. chargement de la base SQLite (en lecture seule) et aperçu des données ;
-3. qualité des données : valeurs manquantes, doublons, part des données de démonstration ;
-4. nettoyage : détection des valeurs aberrantes par la méthode de l'écart interquartile (IQR) ;
-5. statistiques descriptives, et pourquoi la moyenne dépasse la médiane ;
-6. distribution : histogrammes (échelle normale et logarithmique) et boxplot ;
-7. médiane par ville, secteur, expérience et diplôme (groupes d'au moins 5 contributions) ;
-8. taux de prélèvement effectif de 3 000 à 50 000 DH, calculé avec `calcul.py`
-   (progressivité de l'impôt, effet de seuil des frais professionnels) ;
-9. conclusions et limites, notamment le biais de sélection de l'échantillon.
-
-**Lancer le notebook** avec Anaconda (pandas, numpy, matplotlib et sqlite3 suffisent) :
-
-```powershell
-cd analyse
-jupyter notebook analyse_salaires.ipynb
-```
-
-Le notebook doit être ouvert depuis le dossier `analyse/`, car il lit la base avec le chemin relatif
-`../instance/simulateur.db`. Si la base ne contient que des données de démonstration, un avertissement
-le signale : les conclusions sont alors **illustratives**.
+Laraki Yacout — [github.com/Laraki-Yacout](https://github.com/Laraki-Yacout)
