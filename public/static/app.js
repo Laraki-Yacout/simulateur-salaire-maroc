@@ -1,4 +1,4 @@
-// Interactivité du simulateur : tous les calculs viennent de /api/calcul (calcul.py).
+// Interactivité du simulateur : tous les calculs viennent de l'API (calcul.py).
 (function () {
   "use strict";
 
@@ -12,13 +12,22 @@
   const statement = document.querySelector(".statement");
   const bar = document.getElementById("split-bar");
   const tip = document.getElementById("split-tip");
+  const montantLabel = document.getElementById("montant-label");
+  const modeAide = document.getElementById("mode-aide");
+  const negociationBox = document.getElementById("negociation");
+  const positionBox = document.getElementById("position");
 
   const PERSONNES_MAX = Number(personnesInput.max);
   const SEGMENTS = { net: "Net", cnss_ipe: "CNSS + IPE", amo: "AMO", ir: "IR" };
+  const MODES = {
+    brut: { label: "Salaire brut mensuel", curseur: "Salaire brut mensuel (curseur)" },
+    net: { label: "Salaire net mensuel souhaité", curseur: "Salaire net mensuel souhaité (curseur)" },
+  };
 
-  const state = { periode: "mensuel", augmentation: 10, data: null };
+  const state = { mode: "brut", periode: "mensuel", augmentation: 10, data: null };
   let timer = null;
   let controller = null;
+  let positionController = null;
 
   // ---------- Formatage ----------
   function nombre(n) {
@@ -27,9 +36,11 @@
     return (n < 0 ? "-" : "") + groupes + "," + dec;
   }
   const dh = (n) => nombre(n) + " DH";
+  const entier = (n) => String(n).replace(/\B(?=(\d{3})+(?!\d))/g, " ");
   const multiplicateurPeriode = () => (state.periode === "annuel" ? 12 : 1);
 
-  function lireBrut() {
+  // Brut en mode « Brut → Net », net souhaité en mode « Net → Brut ».
+  function lireMontant() {
     // \s couvre aussi l'espace fine insécable des nombres saisis à la française.
     const texte = brutInput.value.replace(/\s/g, "").replace(",", ".");
     return texte === "" ? null : Number(texte);
@@ -123,7 +134,18 @@
     const contribBrut = document.querySelector("[data-contrib-brut]");
     if (contribBrut) contribBrut.textContent = dh(resultat.brut);
 
+    const negociation = state.data.negociation;
+    negociationBox.hidden = !negociation;
+    negociationBox.textContent = negociation ? negociation.message : "";
+    setAlerte("alerte-seuil", state.data.alerte);
+
     renderRaise();
+  }
+
+  function setAlerte(id, message) {
+    const encart = document.getElementById(id);
+    encart.querySelector(".seuil-message").textContent = message || "";
+    encart.hidden = !message;
   }
 
   function renderRaise() {
@@ -138,6 +160,7 @@
     document.querySelector('[data-raise-field="net"]').textContent = dh(scenario.net * mult);
     document.querySelector('[data-raise-field="part_conservee"]').textContent =
       String(scenario.part_conservee).replace(".", ",") + " DH";
+    setAlerte("alerte-augmentation", scenario.alerte || state.data.alerte);
   }
 
   function showError(message) {
@@ -153,15 +176,18 @@
 
   // ---------- Appel à l'API ----------
   async function update() {
-    const brut = lireBrut();
-    if (brut === null) return; // champ vidé pendant la saisie : on garde le dernier résultat
+    const montant = lireMontant();
+    if (montant === null) return; // champ vidé pendant la saisie : on garde le dernier résultat
 
     if (controller) controller.abort();
     controller = new AbortController();
-    const params = new URLSearchParams({ brut: String(brut), personnes: personnesInput.value || "0" });
+    const modeNet = state.mode === "net";
+    const params = new URLSearchParams({ personnes: personnesInput.value || "0" });
+    params.set(modeNet ? "net" : "brut", String(montant));
+    const api = modeNet ? form.dataset.apiNet : form.dataset.api;
 
     try {
-      const res = await fetch(form.dataset.api + "?" + params, { signal: controller.signal });
+      const res = await fetch(api + "?" + params, { signal: controller.signal });
       const data = await res.json();
       if (!res.ok) {
         showError(data.erreur);
@@ -170,6 +196,7 @@
       clearError();
       state.data = data;
       render();
+      updatePosition();
     } catch (e) {
       if (e.name !== "AbortError") showError("Le serveur ne répond pas. Vérifiez qu'il est bien démarré.");
     }
@@ -194,13 +221,39 @@
     schedule(40);
   });
 
-  brutInput.addEventListener("input", () => {
-    const brut = lireBrut();
-    if (brut !== null && !Number.isNaN(brut)) {
-      slider.value = String(Math.min(Math.max(brut, Number(slider.min)), Number(slider.max)));
+  function syncSlider() {
+    const montant = lireMontant();
+    if (montant !== null && !Number.isNaN(montant)) {
+      slider.value = String(Math.min(Math.max(montant, Number(slider.min)), Number(slider.max)));
       paintSlider();
     }
+  }
+
+  brutInput.addEventListener("input", () => {
+    syncSlider();
     schedule(180);
+  });
+
+  // ---------- Brut → Net / Net → Brut ----------
+  document.querySelectorAll("[data-mode]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const mode = btn.dataset.mode;
+      if (mode === state.mode) return;
+      state.mode = mode;
+      document.querySelectorAll("[data-mode]").forEach((bouton) => {
+        bouton.setAttribute("aria-pressed", String(bouton === btn));
+      });
+      montantLabel.textContent = MODES[mode].label;
+      slider.setAttribute("aria-label", MODES[mode].curseur);
+      modeAide.hidden = mode !== "net";
+      // On repart du résultat affiché : le net actuel devient l'objectif, ou inversement.
+      if (state.data) {
+        const r = state.data.resultat;
+        brutInput.value = String(Math.round(mode === "net" ? r.net : r.brut));
+        syncSlider();
+      }
+      schedule(0);
+    });
   });
 
   // ---------- Personnes à charge ----------
@@ -267,6 +320,76 @@
     seg.addEventListener("blur", () => { tip.hidden = true; });
   });
 
+  // ---------- Où je me situe (rien n'est enregistré) ----------
+  function ligne(...morceaux) {
+    const li = document.createElement("li");
+    morceaux.forEach((m) => li.append(m));
+    return li;
+  }
+
+  function fort(texte) {
+    const s = document.createElement("strong");
+    s.textContent = texte;
+    return s;
+  }
+
+  function ligneGroupe(groupe, intitule, autres) {
+    const nom = groupe.nom === "Autre" ? autres : intitule + groupe.nom;
+    if (groupe.pourcentage === null) {
+      return ligne(nom + " : moins de 5 contributions, pas de comparaison possible.");
+    }
+    return ligne(nom + " : plus que ", fort(groupe.pourcentage + " %"),
+      " des " + entier(groupe.nombre) + " contributeurs.");
+  }
+
+  async function updatePosition() {
+    if (!positionBox || !state.data) return;
+    const ville = document.getElementById("c-ville");
+    const secteur = document.getElementById("c-secteur");
+    const params = new URLSearchParams({ brut: String(state.data.resultat.brut) });
+    if (ville && ville.value) params.set("ville", ville.value);
+    if (secteur && secteur.value) params.set("secteur", secteur.value);
+
+    if (positionController) positionController.abort();
+    positionController = new AbortController();
+    try {
+      const res = await fetch(positionBox.dataset.api + "?" + params, { signal: positionController.signal });
+      if (!res.ok) return;
+      const data = await res.json();
+
+      const lignes = [];
+      if (data.ensemble.pourcentage === null) {
+        lignes.push(ligne("Pas encore assez de contributions pour vous situer."));
+      } else {
+        lignes.push(ligne("Vous gagnez plus que ", fort(data.ensemble.pourcentage + " %"),
+          " des " + entier(data.ensemble.nombre) + " contributeurs."));
+      }
+      if (data.ville) lignes.push(ligneGroupe(data.ville, "À ", "Autres villes"));
+      if (data.secteur) lignes.push(ligneGroupe(data.secteur, "Secteur ", "Autres secteurs"));
+      if (!data.ville && !data.secteur && ville && secteur) {
+        const aide = ligne("Choisissez une ville ou un secteur plus bas pour vous comparer à votre groupe.");
+        aide.className = "position-aide";
+        lignes.push(aide);
+      }
+      document.getElementById("position-lignes").replaceChildren(...lignes);
+
+      const demo = document.getElementById("position-demo");
+      demo.hidden = !data.nb_demo;
+      demo.textContent = data.nb_demo
+        ? "Ces chiffres incluent " + entier(data.nb_demo) + " contributions fictives de démonstration : " +
+          "ils illustrent la méthode, pas la réalité du marché."
+        : "";
+      positionBox.hidden = false;
+    } catch (e) {
+      // Bloc facultatif : en cas d'erreur, on garde simplement l'affichage précédent.
+    }
+  }
+
+  ["c-ville", "c-secteur"].forEach((id) => {
+    const select = document.getElementById(id);
+    if (select) select.addEventListener("change", updatePosition);
+  });
+
   // ---------- Contribution aux statistiques (uniquement au clic) ----------
   const contribForm = document.getElementById("contribution");
   if (contribForm) {
@@ -281,7 +404,8 @@
 
     contribForm.addEventListener("submit", async (e) => {
       e.preventDefault();
-      const brut = lireBrut();
+      // En mode « Net → Brut », le brut est celui calculé par le simulateur.
+      const brut = state.mode === "net" ? (state.data ? state.data.resultat.brut : null) : lireMontant();
       if (brut === null || Number.isNaN(brut)) {
         showContribError("Saisissez d'abord un salaire brut dans le simulateur.");
         return;

@@ -37,6 +37,13 @@ def resume(valeurs):
     }
 
 
+def position(valeur, valeurs):
+    """Pourcentage (arrondi à l'unité inférieure) des valeurs strictement plus petites."""
+    if not valeurs:
+        return None
+    return sum(1 for v in valeurs if v < valeur) * 100 // len(valeurs)
+
+
 def histogramme(valeurs, pas=config.HISTOGRAMME_PAS, maximum=config.HISTOGRAMME_MAX):
     """Compte les salaires par tranche de `pas` DH ; la dernière tranche est ouverte."""
     if not valeurs:

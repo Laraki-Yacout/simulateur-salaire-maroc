@@ -10,14 +10,35 @@
 {%- macro m(cle) -%}{{ (resultat[cle] | dh) if resultat else "—" }}{%- endmacro -%}
 {%- macro part(cle) -%}{{ ((resultat[cle] / resultat.brut * 100) | round(2)) if resultat else 0 }}{%- endmacro -%}
 {%- set aug = augmentations[1] if augmentations|length > 1 else None -%}
+{%- macro encart_seuil(id, message) -%}
+  <div class="seuil-alerte" id="{{ id }}" {% if not message %}hidden{% endif %}>
+    <p class="seuil-message" aria-live="polite">{{ message or "" }}</p>
+    <details class="seuil-pourquoi">
+      <summary>Pourquoi&nbsp;?</summary>
+      <p>L'article 59 du Code général des impôts déduit des frais professionnels du salaire&nbsp;:
+        {{ config.FRAIS_PRO_TAUX_BAS | pct }} du brut imposable tant qu'il ne dépasse pas
+        {{ config.FRAIS_PRO_SEUIL_ANNUEL | dh0 }} par an, {{ config.FRAIS_PRO_TAUX_HAUT | pct }} au-delà.
+        Le nouveau taux s'applique à tout le salaire&nbsp;: un dirham de trop fait baisser l'abattement
+        d'environ {{ (config.FRAIS_PRO_SEUIL_ANNUEL / 12 * (config.FRAIS_PRO_TAUX_BAS - config.FRAIS_PRO_TAUX_HAUT)) | dh0 }}
+        par mois, et l'impôt monte d'un coup.
+        Une petite augmentation peut donc réduire le salaire net, tant qu'elle n'est pas assez grande pour compenser.</p>
+    </details>
+  </div>
+{%- endmacro -%}
   <main class="wrap page">
     <div class="sidebar">
     <section class="inputs" aria-labelledby="t-donnees">
       <h2 class="section-title" id="t-donnees"><span class="num">I.</span> Vos données</h2>
 
-      <form method="post" id="simulateur" data-api="{{ url_for('api_calcul') }}" novalidate>
+      <form method="post" id="simulateur" data-api="{{ url_for('api_calcul') }}"
+            data-api-net="{{ url_for('api_brut_pour_net') }}" novalidate>
+        <div class="toggle mode-toggle" role="group" aria-label="Sens du calcul">
+          <button type="button" data-mode="brut" aria-pressed="true">Brut &rarr; Net</button>
+          <button type="button" data-mode="net" aria-pressed="false">Net &rarr; Brut</button>
+        </div>
+
         <div class="field">
-          <label for="brut">Salaire brut mensuel</label>
+          <label for="brut" id="montant-label">Salaire brut mensuel</label>
           <div class="amount-input">
             <input type="text" inputmode="decimal" id="brut" name="brut" value="{{ brut }}"
                    autocomplete="off" aria-describedby="brut-aide">
@@ -29,6 +50,8 @@
           <div class="slider-scale" id="brut-aide">
             <span>{{ config.CURSEUR_MIN | dh }}</span><span>{{ config.CURSEUR_MAX | dh }}</span>
           </div>
+          <p class="hint" id="mode-aide" hidden>Saisissez le net que vous visez&nbsp;: le simulateur donne
+            le plus petit brut entier qui l'atteint, sans jamais tomber dans la zone piège.</p>
         </div>
 
         <div class="field">
@@ -71,6 +94,7 @@
         Nouveau net&nbsp;: <strong data-raise-field="net">{{ (aug.net | dh) if aug else "—" }}</strong>
         <span data-periode-label-court>par mois</span>.
       </p>
+      {{ encart_seuil("alerte-augmentation", (aug.alerte if aug else None) or alerte) }}
     </aside>
     </div>
 
@@ -95,6 +119,15 @@
           <span data-autre-periode-label>par an</span> &middot;
           <span data-text="taux_prelevement">{{ (resultat.taux_prelevement | string | replace(".", ",")) if resultat else "—" }}</span>&nbsp;% du brut prélevé
         </p>
+      </div>
+
+      <p class="negociation" id="negociation" role="status" hidden></p>
+      {{ encart_seuil("alerte-seuil", alerte) }}
+
+      <div class="position" id="position" data-api="{{ url_for('api_position') }}" hidden>
+        <p class="position-titre">Où je me situe <small>salaire brut, comparé aux contributions partagées</small></p>
+        <ul class="position-lignes" id="position-lignes"></ul>
+        <p class="position-demo" id="position-demo" hidden></p>
       </div>
 
       <figure class="split">

@@ -20,10 +20,22 @@ permet de partager anonymement son salaire pour construire des statistiques ouve
   répartition du brut entre net, cotisations et impôt.
 - **Scénarios d'augmentation** (+5 %, +10 %, +20 %) : combien de dirhams d'une augmentation
   arrivent réellement sur la fiche de paie.
+- **Alerte « zone piège »** : jusqu'à 150 DH sous le seuil des frais professionnels, le site
+  prévient qu'une petite augmentation ferait perdre du net et indique le montant minimum à
+  négocier ; entre le seuil et le brut de rattrapage, il signale que l'on toucherait plus avec un
+  brut plus bas. L'alerte apparaît aussi dans l'encart des augmentations, avec une explication en
+  trois phrases.
+- **Mode négociation (net → brut)** : on saisit le net voulu, le site donne le plus petit brut
+  entier qui l'atteint. Comme le net baisse au seuil, la recherche se fait de part et d'autre de
+  celui-ci : aucun brut situé dans la zone piège n'est jamais proposé.
+- **« Où je me situe »** : sous le résultat, la part des contributeurs qui gagnent moins, puis la
+  même chose pour la ville et le secteur choisis (groupes d'au moins 5 contributions), avec une
+  mention claire quand des données de démonstration sont incluses.
 - **Contribution anonyme** de son salaire, avec ville, secteur, expérience et diplôme facultatifs.
 - **Page de statistiques** : médiane, moyenne, quartiles, histogramme, médianes par ville et par
   secteur, en brut ou en net, avec ou sans les données de démonstration.
-- **API JSON** : `/api/calcul`, `/api/contributions` et `/api/sante`.
+- **API JSON** : `/api/calcul`, `/api/brut-pour-net`, `/api/position`, `/api/contributions` et
+  `/api/sante`.
 
 ## Stack technique
 
@@ -74,6 +86,12 @@ départ. Le taux marginal de prélèvement atteint alors 74 %, contre moins de 4
 de la plage étudiée. Le barème de l'impôt lui-même ne présente pas ce défaut : c'est l'abattement
 pour frais professionnels, en marche d'escalier, qui le provoque.
 
+**Confirmé par un simulateur de référence.** Ce simulateur ne retient pas l'indemnité pour perte
+d'emploi (IPE). Dans ce cas, le seuil se situe entre 6 925 et 6 926 DH brut, et le net passe de
+6 410,54 DH à 6 346,45 DH. Avec la même hypothèse, `calcul.py` trouve le même seuil et la même
+baisse, à 1 centime près : le simulateur de référence arrondit chaque ligne avant de faire la
+soustraction, alors que `calcul.py` arrondit seulement le net final. Ce cas est couvert par les tests.
+
 Pour ouvrir le notebook en local, depuis le dossier `analyse/` (il lit `../instance/simulateur.db`) :
 
 ```bash
@@ -92,6 +110,8 @@ jupyter notebook analyse_salaires.ipynb
 - **Base protégée** : la sécurité au niveau des lignes (Row Level Security) est activée sur
   Supabase, ce qui bloque tout accès à la table par l'API publique de Supabase. Seule l'application,
   côté serveur, lit et écrit les données.
+- **Positionnement sans trace** : le calcul « Où je me situe » ne fait que lire la base. Il
+  n'enregistre rien et ne dépose aucun cookie.
 - Une contribution par navigateur toutes les 24 heures, et seuls les bruts entre 2 500 et
   200 000 DH sont acceptés, pour limiter les abus.
 
@@ -136,15 +156,15 @@ Hobby de Vercel, et largement suffisant ici.
 | Fichier | Rôle |
 |---|---|
 | `config.py` | Paramètres légaux 2026 et réglages du site |
-| `calcul.py` | Calcul brut → net |
-| `app.py` | Routes Flask, API JSON, page de statistiques |
+| `calcul.py` | Calcul brut → net, seuil des frais pro, zone piège, recherche net → brut |
+| `app.py` | Routes Flask, API JSON, messages de la zone piège, page de statistiques |
 | `models.py` | Table `contributions` (aucune donnée personnelle) |
 | `statistiques.py` | Médiane, quartiles, histogramme, médianes par groupe |
 | `seed_demo.py` | Génère des contributions fictives, marquées comme telles |
 | `recalculer_nets.py` | Recalcule les nets enregistrés après un changement de règle de calcul |
 | `public/static/` | CSS et JavaScript, servis par le CDN de Vercel |
 | `analyse/` | Notebook d'analyse des données |
-| `tests/` | Tests pytest (calcul, API, contributions, statistiques, déploiement) |
+| `tests/` | Tests pytest (calcul, zone piège, négociation, positionnement, API, déploiement) |
 
 ## Limites
 

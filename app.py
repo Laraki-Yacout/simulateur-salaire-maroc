@@ -1,13 +1,14 @@
 """Application Flask : simulateur de salaire net marocain."""
 
 import os
+import re
 
 from flask import Flask, jsonify, render_template, request, url_for
 from sqlalchemy.pool import NullPool
 
 import config
 import statistiques
-from calcul import calcul_salaire
+from calcul import alerte_seuil, brut_pour_net, calcul_salaire
 from models import Contribution, db
 
 # Sur Vercel, les fichiers statiques doivent être dans public/ : le CDN les sert
@@ -16,6 +17,9 @@ app = Flask(__name__, static_folder="public/static", static_url_path="/static")
 
 MESSAGE_SAISIE_INVALIDE = (
     "Veuillez saisir un salaire brut positif et un nombre de personnes à charge valide."
+)
+MESSAGE_NET_INVALIDE = (
+    "Veuillez saisir un salaire net positif et un nombre de personnes à charge valide."
 )
 BRUT_MAX_SAISIE = 10_000_000
 PERSONNES_MAX_SAISIE = 20
@@ -110,18 +114,72 @@ def format_pct(taux):
     return f"{texte.replace('.', ',')} %"
 
 
+def lire_montant(texte):
+    """Accepte « 12 000,50 », y compris avec l'espace fine insécable des nombres français."""
+    return float(texte.replace(" ", "").replace("\u202f", "").replace(",", "."))
+
+
 def lire_entrees(brut_texte, personnes_texte):
     """Convertit les saisies en nombres ; lève ValueError si elles sont invalides."""
-    # Accepte « 12 000,50 », y compris avec l'espace fine insécable des nombres français.
-    brut = float(brut_texte.replace(" ", "").replace("\u202f", "").replace(",", "."))
+    brut = lire_montant(brut_texte)
     personnes = int(personnes_texte or 0)
     if not 0 < brut <= BRUT_MAX_SAISIE or not 0 <= personnes <= PERSONNES_MAX_SAISIE:
         raise ValueError
     return brut, personnes
 
 
+def sans_coupure(texte):
+    """Espaces insécables dans les montants (« 7 008 DH », « 5 % ») : jamais coupés."""
+    return re.sub(r"(?<=\d) (?=\d|DH|%)", "\u00a0", texte)
+
+
+def montant_dh(montant):
+    """Au dirham près quand le montant est rond, au centime sinon."""
+    return format_dh_arrondi(montant) if float(montant).is_integer() else format_dh(montant)
+
+
+def message_seuil(alerte):
+    """Texte de l'alerte « zone piège » (voir calcul.alerte_seuil), ou None."""
+    if alerte is None:
+        return None
+    if alerte["type"] == "zone":
+        return sans_coupure(
+            "Vous êtes dans la zone piège : vous toucheriez plus avec un brut de "
+            f"{format_dh_arrondi(alerte['dernier_avant'])} ({format_dh(alerte['manque'])} net "
+            f"de plus par mois). Il faut au moins {format_dh_arrondi(alerte['rattrapage'])} "
+            "brut pour en sortir."
+        )
+    hausse = montant_dh(alerte["hausse_piege"])
+    if alerte["variation_net"] < 0:
+        debut = (
+            f"Une augmentation de {hausse} vous ferait perdre "
+            f"{format_dh(-alerte['variation_net'])} net par mois."
+        )
+    else:
+        debut = (
+            f"Une augmentation de {hausse} ne vous rapporterait que "
+            f"{format_dh(alerte['variation_net'])} net par mois."
+        )
+    return sans_coupure(
+        f"{debut} Négociez au moins {montant_dh(alerte['hausse_minimale'])} "
+        f"(soit {format_dh_arrondi(alerte['rattrapage'])} brut)."
+    )
+
+
+def message_augmentation(pourcentage, brut_apres, personnes):
+    """Alerte de l'encart « Et si j'étais augmenté ? » quand le scénario tombe dans la zone."""
+    alerte = alerte_seuil(brut_apres, personnes)
+    if alerte is None or alerte["type"] != "zone":
+        return None
+    return sans_coupure(
+        f"Avec +{pourcentage} %, votre brut ({format_dh(brut_apres)}) tomberait dans la zone "
+        f"piège : vous toucheriez plus avec {format_dh_arrondi(alerte['dernier_avant'])} brut. "
+        f"Visez au moins {format_dh_arrondi(alerte['rattrapage'])}."
+    )
+
+
 def simuler(brut, personnes):
-    """Résultat principal + scénarios d'augmentation, tous issus de calcul.py."""
+    """Résultat principal, alerte de seuil et scénarios d'augmentation, issus de calcul.py."""
     resultat = calcul_salaire(brut, personnes)
     augmentations = []
     for pourcentage in config.AUGMENTATIONS:
@@ -135,8 +193,13 @@ def simuler(brut, personnes):
             "gain_brut": round(gain_brut, 2),
             "gain_net": round(gain_net, 2),
             "part_conservee": round(gain_net / gain_brut * 100, 1) if gain_brut else 0.0,
+            "alerte": message_augmentation(pourcentage, apres["brut"], personnes),
         })
-    return {"resultat": resultat, "augmentations": augmentations}
+    return {
+        "resultat": resultat,
+        "augmentations": augmentations,
+        "alerte": message_seuil(alerte_seuil(brut, personnes)),
+    }
 
 
 @app.route("/", methods=["GET", "POST"])
@@ -159,6 +222,7 @@ def index():
         "index.html",
         resultat=simulation["resultat"] if simulation else None,
         augmentations=simulation["augmentations"] if simulation else [],
+        alerte=simulation["alerte"] if simulation else None,
         erreur=erreur,
         brut=brut,
         personnes=personnes,
@@ -176,6 +240,90 @@ def api_calcul():
     except ValueError:
         return jsonify(erreur=MESSAGE_SAISIE_INVALIDE), 400
     return jsonify(simuler(brut, personnes))
+
+
+@app.get("/api/brut-pour-net")
+def api_brut_pour_net():
+    """Mode négociation : le plus petit brut entier qui donne au moins le net voulu."""
+    try:
+        net_vise = lire_montant(request.args.get("net", ""))
+        personnes = int(request.args.get("personnes", "0") or 0)
+        if not 0 < net_vise or not 0 <= personnes <= PERSONNES_MAX_SAISIE:
+            raise ValueError
+    except ValueError:
+        return jsonify(erreur=MESSAGE_NET_INVALIDE), 400
+
+    brut = brut_pour_net(net_vise, personnes, brut_max=BRUT_MAX_SAISIE)
+    if brut is None:
+        return jsonify(erreur="Ce salaire net est trop élevé pour le simulateur."), 400
+
+    reponse = simuler(brut, personnes)
+    message = (
+        f"Pour toucher au moins {format_dh(net_vise)} net par mois, "
+        f"demandez un brut de {format_dh_arrondi(brut)}."
+    )
+    juste_avant = alerte_seuil(brut - 1, personnes) if brut > 1 else None
+    if juste_avant and juste_avant["type"] == "zone":
+        # Le brut proposé suit juste la zone piège : une contre-offre un peu plus basse
+        # donnerait moins qu'avant le seuil. On le dit clairement.
+        message += (
+            f" N'acceptez pas moins : de {format_dh_arrondi(juste_avant['premier_apres'])} à "
+            f"{format_dh_arrondi(juste_avant['rattrapage'] - 1)} brut, vous toucheriez moins "
+            f"qu'avec {format_dh_arrondi(juste_avant['dernier_avant'])}."
+        )
+    reponse["negociation"] = {
+        "net_vise": round(net_vise, 2), "brut": brut, "message": sans_coupure(message),
+    }
+    return jsonify(reponse)
+
+
+def lire_choix_parametre(nom, choix_possibles):
+    """Paramètre d'URL facultatif : vide -> None, valeur inconnue -> erreur."""
+    valeur = request.args.get(nom, "").strip()
+    if not valeur:
+        return None
+    if valeur not in choix_possibles:
+        raise ValueError
+    return valeur
+
+
+@app.get("/api/position")
+def api_position():
+    """Part des contributeurs qui gagnent moins que ce brut. Rien n'est enregistré."""
+    try:
+        brut, _ = lire_entrees(request.args.get("brut", ""), "0")
+        ville = lire_choix_parametre("ville", config.VILLES)
+        secteur = lire_choix_parametre("secteur", config.SECTEURS)
+    except ValueError:
+        return jsonify(erreur="Paramètres invalides."), 400
+    inclure_demo = request.args.get("demo", "1") != "0"
+
+    requete = db.select(Contribution)
+    if not inclure_demo:
+        requete = requete.where(Contribution.est_demo.is_(False))
+    contributions = db.session.scalars(requete).all()
+
+    def comparer(groupe, nom=None):
+        position = {"nom": nom} if nom else {}
+        if len(groupe) < config.STATS_GROUPE_MIN:
+            # Groupe trop petit : ni pourcentage ni effectif, comme sur la page statistiques.
+            return dict(position, pourcentage=None)
+        return dict(
+            position,
+            pourcentage=statistiques.position(brut, [c.salaire_brut for c in groupe]),
+            nombre=len(groupe),
+        )
+
+    return jsonify(
+        brut=round(brut, 2),
+        ensemble=comparer(contributions),
+        ville=comparer([c for c in contributions if c.ville == ville], ville) if ville else None,
+        secteur=(
+            comparer([c for c in contributions if c.secteur == secteur], secteur)
+            if secteur else None
+        ),
+        nb_demo=sum(1 for c in contributions if c.est_demo),
+    )
 
 
 def lire_choix(nom, choix_possibles):

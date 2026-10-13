@@ -628,6 +628,84 @@ label {
 
 .raise-note strong { color: var(--encre); white-space: nowrap; }
 
+/* ---------- Mode négociation (net → brut) ---------- */
+.mode-toggle { display: flex; margin-bottom: 26px; }
+.mode-toggle button { flex: 1; padding: 8px 10px; }
+html:not(.js) .mode-toggle { display: none; }
+
+.negociation {
+  margin: 22px 0 0;
+  padding: 14px 18px;
+  background: var(--bordeaux-fonce);
+  color: var(--creme);
+  font-weight: 500;
+}
+
+/* ---------- Alerte « zone piège » ---------- */
+.seuil-alerte {
+  margin: 22px 0 0;
+  padding: 14px 18px;
+  background: var(--rose-pale);
+  border-left: 3px solid var(--bordeaux-fonce);
+  font-size: .95rem;
+}
+
+.raise .seuil-alerte { margin-top: 18px; background: var(--papier); }
+
+.seuil-message { margin: 0; color: var(--bordeaux-fonce); font-weight: 500; }
+
+.seuil-pourquoi { margin-top: 8px; }
+
+.seuil-pourquoi summary {
+  display: inline;
+  color: var(--bordeaux);
+  font-weight: 600;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+
+.seuil-pourquoi summary::-webkit-details-marker { display: none; }
+.seuil-pourquoi summary:hover { color: var(--bordeaux-fonce); }
+
+.seuil-pourquoi p { margin: 8px 0 0; color: var(--encre-douce); }
+
+/* ---------- Où je me situe ---------- */
+.position {
+  margin: 22px 0 0;
+  padding: 0 0 18px;
+  border-bottom: 1px solid var(--filet);
+}
+
+.position-titre {
+  margin: 0 0 6px;
+  font-family: var(--serif);
+  font-size: 1.15rem;
+  font-weight: 500;
+  color: var(--bordeaux-fonce);
+}
+
+.position-titre small {
+  display: block;
+  font-family: var(--sans);
+  font-size: .8rem;
+  color: var(--encre-douce);
+}
+
+.position-lignes { margin: 0; padding: 0; list-style: none; }
+
+.position-lignes li { padding: 6px 0; border-top: 1px solid var(--filet); }
+.position-lignes li:first-child { border-top: 0; }
+.position-lignes strong { color: var(--bordeaux-fonce); font-variant-numeric: tabular-nums; }
+.position-lignes .position-aide { color: var(--encre-douce); font-size: .9rem; }
+
+.position-demo {
+  margin: 8px 0 0;
+  font-size: .88rem;
+  font-style: italic;
+  color: var(--bordeaux);
+}
+
 /* ---------- Navigation ---------- */
 .topnav {
   display: flex;
