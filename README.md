@@ -5,11 +5,10 @@ permet de partager anonymement son salaire pour construire des statistiques ouve
 
 **Site en ligne : [simulateur-salaire-maroc.vercel.app](https://simulateur-salaire-maroc.vercel.app)**
 
-![Mode négociation : brut à demander pour un net visé](docs/zone-piege.png)
+![Alerte zone piège pour un brut de 6 900 DH](docs/zone-piege.png)
 
-*Au seuil des frais professionnels, une hausse du brut peut faire baisser le net : le mode
-négociation donne le brut à demander pour un net visé sans jamais proposer un brut de cette
-« zone piège ».*
+*À 6 900 DH brut, une augmentation de 37 DH ferait franchir le seuil des frais professionnels et
+baisser le net de 31,18 DH : le site le signale et indique le montant minimum à négocier.*
 
 ![Page d'accueil : saisie du salaire brut et relevé détaillé du calcul](docs/accueil.png)
 
@@ -42,6 +41,11 @@ négociation donne le brut à demander pour un net visé sans jamais proposer un
   secteur, en brut ou en net, avec ou sans les données de démonstration.
 - **API JSON** : `/api/calcul`, `/api/brut-pour-net`, `/api/position`, `/api/contributions` et
   `/api/sante`.
+
+![Mode Net → Brut : brut à demander pour 27 900 DH net](docs/negociation.png)
+
+*Mode négociation : pour toucher au moins 27 900 DH net par mois, le site indique le brut à
+demander, ici 40 136 DH.*
 
 ## Stack technique
 

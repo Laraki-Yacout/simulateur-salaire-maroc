@@ -340,6 +340,7 @@
     if (groupe.pourcentage === null) {
       return ligne(nom + " : moins de 5 contributions, pas de comparaison possible.");
     }
+    if (groupe.pourcentage === 100) return ligne(nom + " : plus que ", fort("tous"), " les contributeurs.");
     return ligne(nom + " : plus que ", fort(groupe.pourcentage + " %"),
       " des " + entier(groupe.nombre) + " contributeurs.");
   }
@@ -362,6 +363,8 @@
       const lignes = [];
       if (data.ensemble.pourcentage === null) {
         lignes.push(ligne("Pas encore assez de contributions pour vous situer."));
+      } else if (data.ensemble.pourcentage === 100) {
+        lignes.push(ligne("Vous gagnez plus que ", fort("tous"), " les contributeurs."));
       } else {
         lignes.push(ligne("Vous gagnez plus que ", fort(data.ensemble.pourcentage + " %"),
           " des " + entier(data.ensemble.nombre) + " contributeurs."));
