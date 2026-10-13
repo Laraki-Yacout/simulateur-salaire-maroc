@@ -5,6 +5,12 @@ permet de partager anonymement son salaire pour construire des statistiques ouve
 
 **Site en ligne : [simulateur-salaire-maroc.vercel.app](https://simulateur-salaire-maroc.vercel.app)**
 
+![Mode négociation : brut à demander pour un net visé](docs/zone-piege.png)
+
+*Au seuil des frais professionnels, une hausse du brut peut faire baisser le net : le mode
+négociation donne le brut à demander pour un net visé sans jamais proposer un brut de cette
+« zone piège ».*
+
 ![Page d'accueil : saisie du salaire brut et relevé détaillé du calcul](docs/accueil.png)
 
 | Statistiques des salaires partagés | Analyse des données (notebook) |
