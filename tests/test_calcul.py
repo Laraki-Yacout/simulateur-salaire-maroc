@@ -102,3 +102,9 @@ def test_page_web():
     assert "10 362,54 DH" in reponse.get_data(as_text=True)
     erreur = client.post("/", data={"brut": "abc", "personnes": "0"})
     assert "Veuillez saisir" in erreur.get_data(as_text=True)
+
+
+def test_sous_titre_reprend_le_brut_saisi():
+    client = app.test_client()
+    page = client.post("/", data={"brut": "7500", "personnes": "0"}).get_data(as_text=True)
+    assert "vos <span data-lede-brut>7 500,00 DH</span>" in page

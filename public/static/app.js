@@ -133,6 +133,8 @@
     // Toujours mensuel : c'est le brut mensuel qui est enregistré.
     const contribBrut = document.querySelector("[data-contrib-brut]");
     if (contribBrut) contribBrut.textContent = dh(resultat.brut);
+    // Sous-titre de la page : toujours le brut mensuel simulé.
+    document.querySelector("[data-lede-brut]").textContent = dh(resultat.brut);
 
     const negociation = state.data.negociation;
     negociationBox.hidden = !negociation;

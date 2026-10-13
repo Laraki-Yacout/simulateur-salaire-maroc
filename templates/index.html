@@ -2,7 +2,7 @@
 
 {% block entete %}
       <h1>Du brut <em>au net</em></h1>
-      <p class="lede">Ce que deviennent vos {{ (resultat.brut | dh) if resultat else "revenus" }} une fois passés
+      <p class="lede">Ce que deviennent vos <span data-lede-brut>{{ (resultat.brut | dh) if resultat else "revenus" }}</span> une fois passés
         la CNSS, l'AMO et l'impôt sur le revenu&nbsp;: un relevé ligne par ligne, mis à jour pendant la saisie.</p>
 {% endblock %}
 
