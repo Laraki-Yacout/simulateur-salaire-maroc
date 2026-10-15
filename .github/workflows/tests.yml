@@ -1,0 +1,24 @@
+name: tests
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  pytest:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version-file: .python-version
+          cache: pip
+
+      - name: Installer les dépendances
+        run: pip install -r requirements.txt
+
+      # Les tests utilisent une base SQLite en mémoire (tests/conftest.py) :
+      # aucune base ni variable secrète n'est nécessaire.
+      - name: Lancer les tests
+        run: pytest

@@ -1,5 +1,7 @@
 # Simulateur de salaire net — Maroc 2026
 
+[![tests](https://github.com/Laraki-Yacout/simulateur-salaire-maroc/actions/workflows/tests.yml/badge.svg)](https://github.com/Laraki-Yacout/simulateur-salaire-maroc/actions/workflows/tests.yml)
+
 Calcule en temps réel le salaire net d'un salarié marocain à partir de son brut, ligne par ligne, et
 permet de partager anonymement son salaire pour construire des statistiques ouvertes.
 
